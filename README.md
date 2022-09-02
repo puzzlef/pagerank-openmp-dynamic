@@ -1,6 +1,8 @@
 Effect of using different values of tolerance with [OpenMP]-based ordered
 [PageRank algorithm] for [link analysis].
 
+`TODO`
+
 **Unordered PageRank** is the *usual* method of computing PageRank (as given in
 the original PageRank paper by Larry Page et al. [(1)]), where *two rank*
 *vectors* are maintained; one denotes the *current* ranks of vertices, and the

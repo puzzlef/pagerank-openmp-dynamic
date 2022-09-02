@@ -32,6 +32,6 @@ bool readSnapTemporalW(G& a, istream& s, size_t N, bool sym=false) {
     string ln; getline(s, ln);
     if (!readSnapTemporalLineW(a, ln, sym)) break;
   }
-  a.correct();
-  return i>0;
+  if (i>0) a.correct();
+  return N==0 || i>0;
 }
