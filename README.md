@@ -143,6 +143,8 @@ $ ...
 
 
 [![](https://i.imgur.com/sO7WDHn.jpg)](https://in.pinterest.com/pin/636837203543731147/)<br>
+[![DOI](https://zenodo.org/badge/531797868.svg)](https://zenodo.org/badge/latestdoi/531797868)
+
 
 [(1)]: https://gist.github.com/wolfram77/eb7a3b2e44e3c2069e046389b45ead03
 [(2)]: https://github.com/puzzlef/pagerank-openmp-adjust-schedule
