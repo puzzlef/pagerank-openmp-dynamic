@@ -1,40 +1,44 @@
-Effect of using different values of tolerance with [OpenMP]-based ordered
-[PageRank algorithm] for [link analysis].
+Performance of static vs dynamic [OpenMP]-based [PageRank algorithm] for [link analysis].
 
-`TODO`
+Dynamic graphs, which change with time, have many applications. Computing ranks
+of vertices from scratch on every update (*static PageRank*) may not be good
+enough for an *interactive system*. In such cases, we only want to process ranks
+of vertices which are likely to have changed. To handle any new vertices
+added/removed, we first *adjust* the *previous ranks* (before the graph
+update/batch) with a *scaled 1/N-fill* approach [(1)]. Then, with **naive**
+**dynamic approach** we simply run the PageRank algorithm with the *initial ranks*
+set to the adjusted ranks. Alternatively, with the (fully) **dynamic approach**
+we first obtain a *subset of vertices* in the graph which are likely to be
+affected by the update (using BFS/DFS from changed vertices), and then perform
+PageRank computation on *only* this *subset of vertices*.
 
-**Unordered PageRank** is the *usual* method of computing PageRank (as given in
-the original PageRank paper by Larry Page et al. [(1)]), where *two rank*
-*vectors* are maintained; one denotes the *current* ranks of vertices, and the
-other denotes the *previous* ranks. On the contrary, **ordered PageRank** uses
-only *one rank vector*, denoting the current ranks [(2)]. This is similar to
-barrierless non-blocking PageRank implementations by Hemalatha Eedi et al.
-[(3)]. As ranks are updated in the same vector (with each iteration), the order
-in which ranks of vertices are computed *affects* the final consequence (hence
-the adjective *ordered*). However, PageRank is an iteratively converging
-algorithm, rand thus results obtained with either approach are *generally the*
-*same*.
+In this experiment, we compare the performance of **static**, **naive dynamic**,
+and (fully) **dynamic OpenMP-based PageRank** (along with similar *sequential*
+*approaches*). We take *temporal graphs* as input, and add edges to our in-memory
+graph in batches of size `10^2 to 10^6`. However we do *not* perform this on
+every point on the temporal graph, but *only* on *5 time samples* of the graph
+(5 samples are good enough to obtain an average). At each time sample we load
+`B` edges (where *B* is the batch size), and perform *static*, *naive dynamic*,
+and *dynamic* PageRank. At each time sample, each approach is performed *5*
+*times* to obtain an average time for that sample.  A *schedule* of `dynamic, 2048`
+is used for *OpenMP-based PageRank* as obtained in [(2)]. We use the
+follwing PageRank parameters: damping factor `α = 0.85`, tolerance `τ = 10^-6`,
+and limit the maximum number of iterations to `L = 500.` The error between the
+current and the previous iteration is obtained with *L1-norm*, and is used to
+detect convergence. *Dead ends* in the graph are handled by always teleporting
+any vertex in the graph at random (*teleport* approach [(3)]). Error in ranks
+obtained for each approach is measured relative to the *sequential static
+approach* using *L1-norm*.
 
-In this experiment, we perform *OpenMP-based ordered PageRank* while adjusting
-the tolerance `τ` from `10^-1` to `10^-14` with three different tolerance
-functions: `L1-norm`, `L2-norm`, and `L∞-norm`. We also compare it with
-unordered PageRank (both OpenMP-based and sequential) for the same tolerance and
-tolerance function. We use a damping factor of `α = 0.85` and limit the maximum
-number of iterations to `L = 500`. The error between the approaches is
-calculated with *L1-norm*. The *sequential unordered* approach is considered to
-be the *gold standard* (wrt to which error is measured). *Dead ends* in the
-graph are handled by always teleporting any vertex in the graph at random
-(*teleport* approach [(4)]). The teleport contribution to all vertices is
-calculated *once* (for all vertices) at the begining of each iteration.
-
-From the results, we observe that **OpenMP-based ordered PageRank** only
-converges **faster** than the unordered approach **below a tolerance of**
-`τ = 10^-6`. This may be due to *cache coherence overhead* associated with the
-ordered approach, which can exceed the benefit provided by ordered approach with
-loose tolerance values. In terms of the number of iterations, we interestingly
-observe that iterations of OpenMP-based unordered/ordered approaches are higher
-than with sequential approaches. We currently do not have an explanation for
-this.
+From the results, we observe that **naive dynamic and dynamic PageRank are**
+**significantly faster than static PageRank for small batch sizes**. However **as**
+**the batch size increases**, the **gap** between static and the two dynamic
+approaches **decreases** (as one would expect). However, interestingly we note
+that there seems to be *little to no difference* between *naive dynamic* and
+*dynamic* PageRank. As dynamic PageRank has an added cost of finding the subset
+of vertices which might be affected (for which time taken is not considered
+here), it seems that **using naive dynamic PageRank is a better option** (which
+is also easier to implement).
 
 All outputs are saved in a [gist] and a small part of the output is listed here.
 Some [charts] are also included below, generated from [sheets]. The input data
@@ -46,48 +50,81 @@ This experiment was done with guidance from [Prof. Kishore Kothapalli],
 
 ```bash
 $ g++ -std=c++17 -O3 -fopenmp main.cxx
-$ ./a.out ~/data/web-Stanford.mtx
-$ ./a.out ~/data/web-BerkStan.mtx
+$ ./a.out ~/data/email-Eu-core-temporal.txt
+$ ./a.out ~/data/CollegeMsg.txt
 $ ...
 
-# Loading graph /home/subhajit/data/web-Stanford.mtx ...
-# order: 281903 size: 2312497 [directed] {}
-# order: 281903 size: 2312497 [directed] {} (transposeWithDegree)
+# Using graph /home/subhajit/data/email-Eu-core-temporal.txt ...
 # OMP_NUM_THREADS=12
-# [00031.683 ms; 005 iters.] [0.0000e+00 err.] pagerankSeqUnordered {tol_norm: L1, tolerance: 1e-01}
-# [00041.039 ms; 004 iters.] [6.4879e-02 err.] pagerankSeqOrdered   {tol_norm: L1, tolerance: 1e-01}
-# [00005.483 ms; 005 iters.] [6.4879e-02 err.] pagerankOmpUnordered {tol_norm: L1, tolerance: 1e-01}
-# [00006.194 ms; 004 iters.] [1.1537e-02 err.] pagerankOmpOrdered   {tol_norm: L1, tolerance: 1e-01}
-# [00074.416 ms; 012 iters.] [0.0000e+00 err.] pagerankSeqUnordered {tol_norm: L1, tolerance: 1e-02}
-# [00070.314 ms; 007 iters.] [1.2687e-02 err.] pagerankSeqOrdered   {tol_norm: L1, tolerance: 1e-02}
-# [00010.354 ms; 012 iters.] [1.2687e-02 err.] pagerankOmpUnordered {tol_norm: L1, tolerance: 1e-02}
-# ...
-# [03071.110 ms; 500 iters.] [0.0000e+00 err.] pagerankSeqUnordered {tol_norm: Li, tolerance: 1e-13}
-# [04773.107 ms; 500 iters.] [1.6800e-07 err.] pagerankSeqOrdered   {tol_norm: Li, tolerance: 1e-13}
-# [00360.719 ms; 500 iters.] [3.0579e-07 err.] pagerankOmpUnordered {tol_norm: Li, tolerance: 1e-13}
-# [00588.157 ms; 500 iters.] [2.7384e-07 err.] pagerankOmpOrdered   {tol_norm: Li, tolerance: 1e-13}
-# [03050.820 ms; 500 iters.] [0.0000e+00 err.] pagerankSeqUnordered {tol_norm: Li, tolerance: 1e-14}
-# [04781.842 ms; 500 iters.] [1.6800e-07 err.] pagerankSeqOrdered   {tol_norm: Li, tolerance: 1e-14}
-# [00357.327 ms; 500 iters.] [3.0517e-07 err.] pagerankOmpUnordered {tol_norm: Li, tolerance: 1e-14}
-# [00581.229 ms; 500 iters.] [2.7051e-07 err.] pagerankOmpOrdered   {tol_norm: Li, tolerance: 1e-14}
+# Temporal edges: 332335
 #
-# Loading graph /home/subhajit/data/web-BerkStan.mtx ...
-# order: 685230 size: 7600595 [directed] {}
-# order: 685230 size: 7600595 [directed] {} (transposeWithDegree)
+# # Batch size 1e+02
+# [751 order; 6952 size; 00000.446 ms; 046 iters.] [0.0000e+00 err.] pagerankSeqStatic
+# [751 order; 6952 size; 00000.470 ms; 046 iters.] [0.0000e+00 err.] pagerankOmpStatic
+# [751 order; 6952 size; 00000.156 ms; 015 iters.] [4.9179e-06 err.] pagerankSeqNaiveDynamic
+# [751 order; 6952 size; 00000.161 ms; 015 iters.] [4.9179e-06 err.] pagerankOmpNaiveDynamic
+# [751 order; 6952 size; 00000.162 ms; 015 iters.] [4.9179e-06 err.] pagerankSeqDynamic
+# [751 order; 6952 size; 00000.162 ms; 015 iters.] [4.9179e-06 err.] pagerankOmpDynamic
+# [802 order; 10532 size; 00000.399 ms; 028 iters.] [0.0000e+00 err.] pagerankSeqStatic
+# [802 order; 10532 size; 00000.412 ms; 028 iters.] [0.0000e+00 err.] pagerankOmpStatic
+# [802 order; 10532 size; 00000.245 ms; 016 iters.] [2.9494e-06 err.] pagerankSeqNaiveDynamic
+# [802 order; 10532 size; 00000.239 ms; 016 iters.] [2.9494e-06 err.] pagerankOmpNaiveDynamic
+# [802 order; 10532 size; 00000.249 ms; 016 iters.] [2.9494e-06 err.] pagerankSeqDynamic
+# [802 order; 10532 size; 00000.246 ms; 016 iters.] [2.9494e-06 err.] pagerankOmpDynamic
+# ...
+# [986 order; 24929 size; 00000.746 ms; 023 iters.] [0.0000e+00 err.] pagerankSeqStatic
+# [986 order; 24929 size; 00000.719 ms; 023 iters.] [0.0000e+00 err.] pagerankOmpStatic
+# [986 order; 24929 size; 00000.356 ms; 011 iters.] [3.1348e-06 err.] pagerankSeqNaiveDynamic
+# [986 order; 24929 size; 00000.360 ms; 011 iters.] [3.1348e-06 err.] pagerankOmpNaiveDynamic
+# [986 order; 24929 size; 00000.358 ms; 011 iters.] [3.1348e-06 err.] pagerankSeqDynamic
+# [986 order; 24929 size; 00000.346 ms; 011 iters.] [3.1348e-06 err.] pagerankOmpDynamic
+#
+# # Batch size 1e+03
+# [751 order; 6952 size; 00000.456 ms; 046 iters.] [0.0000e+00 err.] pagerankSeqStatic
+# [751 order; 6952 size; 00000.473 ms; 046 iters.] [0.0000e+00 err.] pagerankOmpStatic
+# [751 order; 6952 size; 00000.244 ms; 023 iters.] [8.9126e-06 err.] pagerankSeqNaiveDynamic
+# [751 order; 6952 size; 00000.243 ms; 023 iters.] [8.9126e-06 err.] pagerankOmpNaiveDynamic
+# [751 order; 6952 size; 00000.253 ms; 023 iters.] [8.9126e-06 err.] pagerankSeqDynamic
+# [751 order; 6952 size; 00000.236 ms; 023 iters.] [8.9126e-06 err.] pagerankOmpDynamic
+# [802 order; 10532 size; 00000.396 ms; 028 iters.] [0.0000e+00 err.] pagerankSeqStatic
+# [802 order; 10532 size; 00000.416 ms; 028 iters.] [0.0000e+00 err.] pagerankOmpStatic
+# [802 order; 10532 size; 00000.293 ms; 020 iters.] [8.0420e-07 err.] pagerankSeqNaiveDynamic
+# [802 order; 10532 size; 00000.297 ms; 020 iters.] [8.0420e-07 err.] pagerankOmpNaiveDynamic
+# [802 order; 10532 size; 00000.299 ms; 020 iters.] [8.0420e-07 err.] pagerankSeqDynamic
+# [802 order; 10532 size; 00000.295 ms; 020 iters.] [8.0420e-07 err.] pagerankOmpDynamic
+# ...
+#
+# # Batch size 1e+06
+# [986 order; 24929 size; 00000.746 ms; 023 iters.] [0.0000e+00 err.] pagerankSeqStatic
+# [986 order; 24929 size; 00000.748 ms; 023 iters.] [0.0000e+00 err.] pagerankOmpStatic
+# [986 order; 24929 size; 00000.749 ms; 023 iters.] [0.0000e+00 err.] pagerankSeqNaiveDynamic
+# [986 order; 24929 size; 00000.743 ms; 023 iters.] [0.0000e+00 err.] pagerankOmpNaiveDynamic
+# [986 order; 24929 size; 00000.737 ms; 023 iters.] [0.0000e+00 err.] pagerankSeqDynamic
+# [986 order; 24929 size; 00000.710 ms; 023 iters.] [0.0000e+00 err.] pagerankOmpDynamic
+#
+#
+# Using graph /home/subhajit/data/CollegeMsg.txt ...
 # OMP_NUM_THREADS=12
-# [00070.303 ms; 005 iters.] [0.0000e+00 err.] pagerankSeqUnordered {tol_norm: L1, tolerance: 1e-01}
-# [00058.766 ms; 004 iters.] [9.5628e-02 err.] pagerankSeqOrdered   {tol_norm: L1, tolerance: 1e-01}
-# [00010.088 ms; 005 iters.] [9.5627e-02 err.] pagerankOmpUnordered {tol_norm: L1, tolerance: 1e-01}
-# [00008.914 ms; 004 iters.] [7.0768e-02 err.] pagerankOmpOrdered   {tol_norm: L1, tolerance: 1e-01}
-# [00165.733 ms; 012 iters.] [0.0000e+00 err.] pagerankSeqUnordered {tol_norm: L1, tolerance: 1e-02}
-# [00115.817 ms; 008 iters.] [1.9341e-02 err.] pagerankSeqOrdered   {tol_norm: L1, tolerance: 1e-02}
-# [00020.469 ms; 012 iters.] [1.9340e-02 err.] pagerankOmpUnordered {tol_norm: L1, tolerance: 1e-02}
-# [00015.728 ms; 008 iters.] [1.7850e-02 err.] pagerankOmpOrdered   {tol_norm: L1, tolerance: 1e-02}
+# Temporal edges: 59836
+#
+# # Batch size 1e+02
+# [564 order; 2335 size; 00000.207 ms; 043 iters.] [0.0000e+00 err.] pagerankSeqStatic
+# [564 order; 2335 size; 00000.194 ms; 043 iters.] [0.0000e+00 err.] pagerankOmpStatic
+# [564 order; 2335 size; 00000.236 ms; 023 iters.] [3.2353e-06 err.] pagerankSeqNaiveDynamic
+# [564 order; 2335 size; 00000.282 ms; 023 iters.] [3.2353e-06 err.] pagerankOmpNaiveDynamic
+# [564 order; 2335 size; 00000.260 ms; 023 iters.] [3.2353e-06 err.] pagerankSeqDynamic
+# [564 order; 2335 size; 00000.327 ms; 023 iters.] [3.2353e-06 err.] pagerankOmpDynamic
+# [792 order; 4452 size; 00000.364 ms; 048 iters.] [0.0000e+00 err.] pagerankSeqStatic
+# [792 order; 4452 size; 00000.374 ms; 048 iters.] [0.0000e+00 err.] pagerankOmpStatic
+# [792 order; 4452 size; 00000.178 ms; 023 iters.] [1.0701e-05 err.] pagerankSeqNaiveDynamic
+# [792 order; 4452 size; 00000.175 ms; 023 iters.] [1.0701e-05 err.] pagerankOmpNaiveDynamic
+# [792 order; 4452 size; 00000.235 ms; 023 iters.] [1.0701e-05 err.] pagerankSeqDynamic
+# [792 order; 4452 size; 00000.614 ms; 023 iters.] [1.0701e-05 err.] pagerankOmpDynamic
 # ...
 ```
 
-[![](https://i.imgur.com/DXQtjER.png)][sheetp]
-[![](https://i.imgur.com/f4OtE4b.png)][sheetp]
+[![](https://i.imgur.com/n7Qvkqt.png)][sheetp]
+[![](https://i.imgur.com/wn8Lthe.png)][sheetp]
 
 <br>
 <br>
@@ -95,7 +132,6 @@ $ ...
 
 ## References
 
-- [An Efficient Practical Non-Blocking PageRank Algorithm for Large Scale Graphs; Hemalatha Eedi et al. (2021)](https://ieeexplore.ieee.org/document/9407114)
 - [PageRank Algorithm, Mining massive Datasets (CS246), Stanford University](https://www.youtube.com/watch?v=ke9g8hB0MEo)
 - [The PageRank Citation Ranking: Bringing Order to the Web; Larry Page et al. (1998)](https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.38.5427)
 - [The University of Florida Sparse Matrix Collection; Timothy A. Davis et al. (2011)](https://doi.org/10.1145/2049662.2049663)
@@ -106,14 +142,11 @@ $ ...
 <br>
 
 
-[![](https://i.imgur.com/qp7YIhe.jpg)](https://www.youtube.com/watch?v=69-J2m_GyhI)<br>
-[![DOI](https://zenodo.org/badge/530790127.svg)](https://zenodo.org/badge/latestdoi/530790127)
+[![](https://i.imgur.com/sO7WDHn.jpg)](https://in.pinterest.com/pin/636837203543731147/)<br>
 
-
-[(1)]: https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.38.5427
-[(2)]: https://github.com/puzzlef/pagerank-ordered-vs-unordered
-[(3)]: https://ieeexplore.ieee.org/document/9407114
-[(4)]: https://gist.github.com/wolfram77/94c38b9cfbf0c855e5f42fa24a8602fc
+[(1)]: https://gist.github.com/wolfram77/eb7a3b2e44e3c2069e046389b45ead03
+[(2)]: https://github.com/puzzlef/pagerank-openmp-adjust-schedule
+[(3)]: https://gist.github.com/wolfram77/94c38b9cfbf0c855e5f42fa24a8602fc
 [Prof. Dip Sankar Banerjee]: https://sites.google.com/site/dipsankarban/
 [Prof. Kishore Kothapalli]: https://faculty.iiit.ac.in/~kkishore/
 [Prof. Sathya Peri]: https://people.iith.ac.in/sathya_p/
@@ -121,7 +154,7 @@ $ ...
 [OpenMP]: https://en.wikipedia.org/wiki/OpenMP
 [PageRank algorithm]: https://en.wikipedia.org/wiki/PageRank
 [link analysis]: https://en.wikipedia.org/wiki/Network_theory#Link_analysis
-[gist]: https://gist.github.com/wolfram77/12aef056d47ecadf05dee0fec4918021
-[charts]: https://imgur.com/a/AC6gRGQ
-[sheets]: https://docs.google.com/spreadsheets/d/1cXSdBuMwdhIlN1ufXdl_tvzeU2DeVIAI9efU0zQRBPM/edit?usp=sharing
-[sheetp]: https://docs.google.com/spreadsheets/d/e/2PACX-1vSeuJwLt-RUwAn70YXDFx5soAjY2ikgySDYoFx8vOeB49d7INSRECTJnEsrLWQXstyQwE_lCA3aPQVL/pubhtml
+[gist]: https://gist.github.com/wolfram77/170158f966f6c18757434dfa5ba0663f
+[charts]: https://imgur.com/a/4RzD9uD
+[sheets]: https://docs.google.com/spreadsheets/d/1R4orGRDO_8cKxNOhz48euJQaJ8KyWQ7moxdvruOBN8Y/edit?usp=sharing
+[sheetp]: https://docs.google.com/spreadsheets/d/e/2PACX-1vTNA8K91pvoCNlXwt6m-N9Mo3GUHU-JeFL6CwrcVOktN1zpYgJt5Z1jJMPt3We5m1cxjrQcfVO3Qrl3/pubhtml
