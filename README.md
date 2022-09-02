@@ -1,5 +1,7 @@
 Performance of static vs dynamic [OpenMP]-based [PageRank algorithm] for [link analysis].
 
+`TODO`
+
 Dynamic graphs, which change with time, have many applications. Computing ranks
 of vertices from scratch on every update (*static PageRank*) may not be good
 enough for an *interactive system*. In such cases, we only want to process ranks

@@ -1,7 +1,7 @@
-# https://www.kaggle.com/wolfram77/puzzlef-pagerank-openmp-static-vs-dynamic
+# https://www.kaggle.com/wolfram77/puzzlef-pagerank-ordered-openmp-static-vs-dynamic
 import os
 from IPython.display import FileLink
-src="pagerank-openmp-static-vs-dynamic"
+src="pagerank-ordered-openmp-static-vs-dynamic"
 inp="/kaggle/input/graphs"
 out="{}.txt".format(src)
 !printf "" > "$out"

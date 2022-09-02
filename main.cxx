@@ -38,7 +38,7 @@ void runPagerankBatch(const string& data, size_t batch, size_t skip, int repeat)
     // Lets skip some edges.
     if (!readSnapTemporalW(x, stream, skip)) break;
     auto xt  = transposeWithDegree(x);
-    auto a0  = pagerankMonolithicSeq<false>(x, xt, initStatic);
+    auto a0  = pagerankMonolithicSeq<true>(x, xt, initStatic);
     auto ksOld = vertexKeys(x);
     ranksOld   = a0.ranks;
 
@@ -48,13 +48,13 @@ void runPagerankBatch(const string& data, size_t batch, size_t skip, int repeat)
     auto ks = vertexKeys(y);
     auto yt = transposeWithDegree(y);
 
-    // Find unordered pagerank using a single thread (static).
-    auto a1 = pagerankMonolithicSeq<false>(y, yt, initStatic, {repeat});
+    // Find ordered pagerank using a single thread (static).
+    auto a1 = pagerankMonolithicSeq<true>(y, yt, initStatic, {repeat});
     auto e1 = l1Norm(a1.ranks, a1.ranks);
     printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankSeqStatic\n", y.order(), y.size(), a1.time, a1.iterations, e1);
 
-    // Find unordered pagerank accelerated with OpenMP (static).
-    auto a2 = pagerankMonolithicOmp<false>(y, yt, initStatic, {repeat});
+    // Find ordered pagerank accelerated with OpenMP (static).
+    auto a2 = pagerankMonolithicOmp<true>(y, yt, initStatic, {repeat});
     auto e2 = l1Norm(a2.ranks, a1.ranks);
     printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankOmpStatic\n", y.order(), y.size(), a2.time, a2.iterations, e2);
 
@@ -62,23 +62,23 @@ void runPagerankBatch(const string& data, size_t batch, size_t skip, int repeat)
     ranksAdj.resize(y.span());
     adjustRanks(ranksAdj, ranksOld, ksOld, ks, 0.0f, float(ksOld.size())/ks.size(), 1.0f/ks.size());
 
-    // Find unordered pagerank using a single thread (naive dynamic).
-    auto a3 = pagerankMonolithicSeq<false>(y, yt, initDynamic, {repeat});
+    // Find ordered pagerank using a single thread (naive dynamic).
+    auto a3 = pagerankMonolithicSeq<true>(y, yt, initDynamic, {repeat});
     auto e3 = l1Norm(a3.ranks, a1.ranks);
     printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankSeqNaiveDynamic\n", y.order(), y.size(), a3.time, a3.iterations, e3);
 
-    // Find unordered pagerank accelerated with OpenMP (naive dynamic).
-    auto a4 = pagerankMonolithicOmp<false>(y, yt, initDynamic, {repeat});
+    // Find ordered pagerank accelerated with OpenMP (naive dynamic).
+    auto a4 = pagerankMonolithicOmp<true>(y, yt, initDynamic, {repeat});
     auto e4 = l1Norm(a4.ranks, a1.ranks);
     printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankOmpNaiveDynamic\n", y.order(), y.size(), a4.time, a4.iterations, e4);
 
-    // Find unordered pagerank using a single thread (dynamic).
-    auto a5 = pagerankMonolithicSeqDynamic<false>(x, xt, y, yt, initDynamic, {repeat});
+    // Find ordered pagerank using a single thread (dynamic).
+    auto a5 = pagerankMonolithicSeqDynamic<true>(x, xt, y, yt, initDynamic, {repeat});
     auto e5 = l1Norm(a5.ranks, a1.ranks);
     printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankSeqDynamic\n", y.order(), y.size(), a5.time, a5.iterations, e5);
 
-    // Find unordered pagerank accelerated with OpenMP (dynamic).
-    auto a6 = pagerankMonolithicOmpDynamic<false>(x, xt, y, yt, initDynamic, {repeat});
+    // Find ordered pagerank accelerated with OpenMP (dynamic).
+    auto a6 = pagerankMonolithicOmpDynamic<true>(x, xt, y, yt, initDynamic, {repeat});
     auto e6 = l1Norm(a6.ranks, a1.ranks);
     printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankOmpDynamic\n", y.order(), y.size(), a6.time, a6.iterations, e6);
 

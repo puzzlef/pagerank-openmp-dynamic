@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-src="pagerank-openmp-static-vs-dynamic"
+src="pagerank-ordered-openmp-static-vs-dynamic"
 out="/home/resources/Documents/subhajit/$src.log"
 ulimit -s unlimited
 printf "" > "$out"
