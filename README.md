@@ -152,6 +152,7 @@ $ ...
 
 
 [![](https://i.imgur.com/sO7WDHn.jpg)](https://in.pinterest.com/pin/636837203543731147/)<br>
+[![DOI](https://zenodo.org/badge/532019117.svg)](https://zenodo.org/badge/latestdoi/532019117)
 
 
 [(1)]: https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.38.5427
