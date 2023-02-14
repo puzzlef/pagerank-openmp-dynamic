@@ -1,9 +1,11 @@
-#include <utility>
 #include <algorithm>
-#include <vector>
+#include <chrono>
+#include <random>
+#include <thread>
 #include <string>
-#include <sstream>
+#include <vector>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include "src/main.hxx"
 
@@ -12,102 +14,163 @@ using namespace std;
 
 
 
-// You can define datatype with -DTYPE=...
+// Fixed config
 #ifndef TYPE
-#define TYPE float
+#define TYPE double
 #endif
-// You can define number of threads with -DMAX_THREADS=...
 #ifndef MAX_THREADS
-#define MAX_THREADS 12
+#define MAX_THREADS 24
+#endif
+#ifndef REPEAT_BATCH
+#define REPEAT_BATCH 5
+#endif
+#ifndef REPEAT_METHOD
+#define REPEAT_METHOD 5
 #endif
 
 
 
 
-void runPagerankBatch(const string& data, size_t batch, size_t skip, int repeat) {
-  using K = int;
-  using T = TYPE;
-  enum NormFunction { L0=0, L1=1, L2=2, Li=3 };
-  vector<T> ranksOld, ranksAdj;
-  vector<T> *initStatic  = nullptr;
-  vector<T> *initDynamic = &ranksAdj;
+// GENERATE BATCH
+// --------------
 
-  OutDiGraph<K> x;
-  stringstream  stream(data);
+template <class G, class R>
+inline auto addRandomEdges(G& a, R& rnd, size_t batchSize, size_t i, size_t n) {
+  using K = typename G::key_type;
+  int retries = 5;
+  vector<tuple<K, K>> insertions;
+  auto fe = [&](auto u, auto v, auto w) {
+    a.addEdge(u, v);
+    insertions.push_back(make_tuple(u, v));
+  };
+  for (size_t l=0; l<batchSize; ++l)
+    retry([&]() { return addRandomEdge(a, rnd, i, n, None(), fe); }, retries);
+  updateOmpU(a);
+  return insertions;
+}
+
+
+template <class G, class R>
+inline auto removeRandomEdges(G& a, R& rnd, size_t batchSize, size_t i, size_t n) {
+  using K = typename G::key_type;
+  int retries = 5;
+  vector<tuple<K, K>> deletions;
+  auto fe = [&](auto u, auto v) {
+    a.removeEdge(u, v);
+    deletions.push_back(make_tuple(u, v));
+  };
+  for (size_t l=0; l<batchSize; ++l)
+    retry([&]() { return removeRandomEdge(a, rnd, i, n, fe); }, retries);
+  updateOmpU(a);
+  return deletions;
+}
+
+
+
+
+// PERFORM EXPERIMENT
+// ------------------
+
+template <class G, class R, class F>
+inline void runAbsoluteBatches(const G& x, R& rnd, F fn) {
+  size_t d = BATCH_DELETIONS_BEGIN;
+  size_t i = BATCH_INSERTIONS_BEGIN;
   while (true) {
-    // Lets skip some edges.
-    if (!readSnapTemporalW(x, stream, skip)) break;
-    auto xt  = transposeWithDegree(x);
-    auto a0  = pagerankMonolithicSeq<false>(x, xt, initStatic);
-    auto ksOld = vertexKeys(x);
-    ranksOld   = a0.ranks;
-
-    // Read batch to be processed.
-    auto y  = duplicate(x);
-    if (!readSnapTemporalW(y, stream, batch)) break;
-    auto ks = vertexKeys(y);
-    auto yt = transposeWithDegree(y);
-
-    // Find unordered pagerank using a single thread (static).
-    auto a1 = pagerankMonolithicSeq<false>(y, yt, initStatic, {repeat});
-    auto e1 = l1Norm(a1.ranks, a1.ranks);
-    printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankSeqStatic\n", y.order(), y.size(), a1.time, a1.iterations, e1);
-
-    // Find unordered pagerank accelerated with OpenMP (static).
-    auto a2 = pagerankMonolithicOmp<false>(y, yt, initStatic, {repeat});
-    auto e2 = l1Norm(a2.ranks, a1.ranks);
-    printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankOmpStatic\n", y.order(), y.size(), a2.time, a2.iterations, e2);
-
-    // Adjust ranks for dynamic Pagerank.
-    ranksAdj.resize(y.span());
-    adjustRanks(ranksAdj, ranksOld, ksOld, ks, 0.0f, float(ksOld.size())/ks.size(), 1.0f/ks.size());
-
-    // Find unordered pagerank using a single thread (naive dynamic).
-    auto a3 = pagerankMonolithicSeq<false>(y, yt, initDynamic, {repeat});
-    auto e3 = l1Norm(a3.ranks, a1.ranks);
-    printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankSeqNaiveDynamic\n", y.order(), y.size(), a3.time, a3.iterations, e3);
-
-    // Find unordered pagerank accelerated with OpenMP (naive dynamic).
-    auto a4 = pagerankMonolithicOmp<false>(y, yt, initDynamic, {repeat});
-    auto e4 = l1Norm(a4.ranks, a1.ranks);
-    printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankOmpNaiveDynamic\n", y.order(), y.size(), a4.time, a4.iterations, e4);
-
-    // Find unordered pagerank using a single thread (dynamic).
-    auto a5 = pagerankMonolithicSeqDynamic<false>(x, xt, y, yt, initDynamic, {repeat});
-    auto e5 = l1Norm(a5.ranks, a1.ranks);
-    printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankSeqDynamic\n", y.order(), y.size(), a5.time, a5.iterations, e5);
-
-    // Find unordered pagerank accelerated with OpenMP (dynamic).
-    auto a6 = pagerankMonolithicOmpDynamic<false>(x, xt, y, yt, initDynamic, {repeat});
-    auto e6 = l1Norm(a6.ranks, a1.ranks);
-    printf("[%zu order; %zu size; %09.3f ms; %03d iters.] [%.4e err.] pagerankOmpDynamic\n", y.order(), y.size(), a6.time, a6.iterations, e6);
-
-    // Now time to move on to next batch.
-    x = move(y);
+    for (int r=0; r<REPEAT_BATCH; ++r) {
+      auto y  = duplicate(x);
+      auto deletions  = removeRandomEdges(y, rnd, d, 1, x.span()-1);
+      auto insertions = addRandomEdges   (y, rnd, i, 1, x.span()-1);
+      auto yt = transposeWithDegreeOmp(y);
+      fn(y, yt, deletions, insertions);
+    }
+    if (d>=BATCH_DELETIONS_END && i>=BATCH_INSERTIONS_END) break;
+    d BATCH_DELETIONS_STEP;
+    i BATCH_INSERTIONS_STEP;
+    d = min(d, size_t(BATCH_DELETIONS_END));
+    i = min(i, size_t(BATCH_INSERTIONS_END));
   }
 }
 
 
-void runPagerank(const string& data, int repeat) {
-  size_t M = countLines(data), steps = 10;
-  printf("Temporal edges: %zu\n\n", M);
-  for (size_t batch=100; batch<=1000000; batch*=10) {
-    size_t skip = max(int64_t(M/steps) - int64_t(batch), 0L);
-    printf("# Batch size %.0e\n", double(batch));
-    runPagerankBatch(data, batch, skip, repeat);
-    printf("\n");
+template <class G, class R, class F>
+inline void runRelativeBatches(const G& x, R& rnd, F fn) {
+  double d = BATCH_DELETIONS_BEGIN;
+  double i = BATCH_INSERTIONS_BEGIN;
+  while (true) {
+    for (int r=0; r<REPEAT_BATCH; ++r) {
+      auto y  = duplicate(x);
+      auto deletions  = removeRandomEdges(y, rnd, size_t(d * x.size()), 1, x.span()-1);
+      auto insertions = addRandomEdges   (y, rnd, size_t(i * x.size()), 1, x.span()-1);
+      auto yt = transposeWithDegreeOmp(y);
+      fn(y, yt, deletions, insertions);
+    }
+    if (d>=BATCH_DELETIONS_END && i>=BATCH_INSERTIONS_END) break;
+    d BATCH_DELETIONS_STEP;
+    i BATCH_INSERTIONS_STEP;
+    d = min(d, double(BATCH_DELETIONS_END));
+    i = min(i, double(BATCH_INSERTIONS_END));
   }
+}
+
+
+template <class G, class R, class F>
+inline void runBatches(const G& x, R& rnd, F fn) {
+  if (BATCH_UNIT=="%") runRelativeBatches(x, rnd, fn);
+  else runAbsoluteBatches(x, rnd, fn);
+}
+
+
+template <class G, class H>
+void runExperiment(const G& x, const H& xt) {
+  using  K = typename G::key_type;
+  using  V = TYPE;
+  vector<V> *init = nullptr;
+  random_device dev;
+  default_random_engine rnd(dev());
+  int repeat = REPEAT_METHOD;
+  // Get ranks of vertices on original graph (static).
+  auto a0 = pagerankBasicOmp(xt, init, {1});
+  // Get ranks of vertices on updated graph (dynamic).
+  runBatches(x, rnd, [&](const auto& y, const auto& yt, const auto& deletions, const auto& insertions) {
+    // Generate common Pagerank data for speeding up experiment.
+    size_t affectedCount = countValue(pagerankAffectedTraversal(x, y, deletions, insertions), true);
+    // Follow a specific result logging format, which can be easily parsed later.
+    auto flog  = [&](const auto& ans, const auto& ref, const char *technique) {
+      auto err = l1NormOmp(ans.ranks, ref.ranks);
+      LOG(
+        "{-%.3e/+%.3e batch, %.3e aff} -> {%09.1fms, %03d iter, %.2e err] %s\n",
+        double(deletions.size()), double(insertions.size()), double(affectedCount),
+        ans.time, ans.iterations, err, technique
+      );
+    };
+    auto r1 = pagerankBasicOmp(yt, init, {1});
+    // Find multi-threaded OpenMP-based Static PageRank (synchronous, no dead ends).
+    auto a1 = pagerankBasicOmp(yt, init, {repeat});
+    flog(a1, r1, "pagerankBasicOmp");
+    // Find multi-threaded OpenMP-based Naive-dynamic PageRank (synchronous, no dead ends).
+    auto a2 = pagerankBasicOmp(yt, &a0.ranks, {repeat});
+    flog(a2, r1, "pagerankBasicNaiveDynamicOmp");
+    // Find multi-threaded OpenMP-based Traversal-based Dynamic PageRank (synchronous, no dead ends).
+    auto a3 = pagerankBasicDynamicTraversalOmp(x, xt, y, yt, deletions, insertions, &a0.ranks, {repeat});
+    flog(a3, r1, "pagerankBasicDynamicTraversalOmp");
+    // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank (synchronous, no dead ends).
+    auto a4 = pagerankBasicDynamicFrontierOmp (x, xt, y, yt, deletions, insertions, &a0.ranks, {repeat});
+    flog(a4, r1, "pagerankBasicDynamicFrontierOmp");
+  });
 }
 
 
 int main(int argc, char **argv) {
   char *file = argv[1];
-  int repeat = argc>2? stoi(argv[2]) : 5;
-  printf("Using graph %s ...\n", file);
-  string data = readFile(file);
   omp_set_num_threads(MAX_THREADS);
-  printf("OMP_NUM_THREADS=%d\n", MAX_THREADS);
-  runPagerank(data, repeat);
+  LOG("OMP_NUM_THREADS=%d\n", MAX_THREADS);
+  LOG("Loading graph %s ...\n", file);
+  OutDiGraph<uint32_t> x;
+  readMtxOmpW(x, file); LOG(""); println(x);
+  auto fl = [](auto u) { return true; };
+  x = selfLoopOmp(x, None(), fl);      LOG(""); print(x);  printf(" (selfLoopAllVertices)\n");
+  auto xt = transposeWithDegreeOmp(x); LOG(""); print(xt); printf(" (transposeWithDegree)\n");
+  runExperiment(x, xt);
   printf("\n");
   return 0;
 }
