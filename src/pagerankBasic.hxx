@@ -37,7 +37,7 @@ inline int pagerankBasicSeqLoop(vector<int>& e, vector<V>& a, vector<V>& r, vect
   size_t N = xt.order();
   int    l = 0;
   while (l<L) {
-    V C0 = DEAD? pagerankTeleport(r, xt, P) : (1-P)/N;
+    V C0 = DEAD? pagerankTeleport(xt, r, P) : (1-P)/N;
     pagerankCalculateRanks(a, xt, r, c, C0, E, fa, fp); ++l;  // update ranks of vertices
     multiplyValuesW(c, a, f);        // update partial contributions (c)
     V el = pagerankError(a, r, EF);  // compare previous and current ranks
@@ -54,7 +54,7 @@ inline int pagerankBasicOmpLoop(vector<int>& e, vector<V>& a, vector<V>& r, vect
   size_t N = xt.order();
   int    l = 0;
   while (l<L) {
-    V C0 = DEAD? pagerankTeleportOmp(r, xt, P) : (1-P)/N;
+    V C0 = DEAD? pagerankTeleportOmp(xt, r, P) : (1-P)/N;
     pagerankCalculateRanksOmp(a, xt, r, c, C0, E, fa, fp); ++l;  // update ranks of vertices
     multiplyValuesOmpW(c, a, f);        // update partial contributions (c)
     V el = pagerankErrorOmp(a, r, EF);  // compare previous and current ranks

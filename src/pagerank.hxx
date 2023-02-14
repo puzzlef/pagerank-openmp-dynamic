@@ -156,7 +156,7 @@ inline void pagerankFactorOmp(vector<V>& a, const H& xt, V P) {
   #pragma omp parallel for schedule(auto)
   for (K v=0; v<S; ++v) {
     if (!xt.hasVertex(v)) continue;
-    K  d = xt.vertexData(v);
+    K  d = xt.vertexValue(v);
     a[v] = d>0? P/d : 0;
   }
 }
@@ -197,7 +197,7 @@ inline V pagerankTeleportOmp(const H& xt, const vector<V>& r, V P) {
   #pragma omp parallel for schedule(auto) reduction(+:a)
   for (K v=0; v<S; ++v) {
     if (!xt.hasVertex(v)) continue;
-    K   d = xt.vertexData(v);
+    K   d = xt.vertexValue(v);
     if (d==0) a += P * r[v]/N;
   }
   return a;
@@ -225,7 +225,7 @@ template <class H, class K, class V>
 inline V pagerankCalculateRankDelta(vector<V>& a, const H& xt, const vector<V>& r, const vector<V>& c, K v, V C0) {
   V av = C0;
   V rv = r[v];
-  xt.forEachEdgeKey([&](auto u) {
+  xt.forEachEdgeKey(v, [&](auto u) {
     av += c[u];
   });
   a[v] = av;
@@ -243,18 +243,19 @@ inline V pagerankCalculateRankDelta(vector<V>& a, const H& xt, const vector<V>& 
  * @param fa is vertex affected? (vertex)
  * @param fp per vertex processing (vertex)
  */
-template <class H, class K, class V, class FA, class FP>
+template <class H, class V, class FA, class FP>
 inline void pagerankCalculateRanks(vector<V>& a, const H& xt, const vector<V>& r, const vector<V>& c, V C0, V E, FA fa, FP fp) {
   xt.forEachVertexKey([&](auto v) {
-    if (!fa(v)) continue;
+    if (!fa(v)) return;
     if (abs(pagerankCalculateRankDelta(a, xt, r, c, v, C0)) > E) fp(v);
   });
 }
 
 
 #ifdef OPENMP
-template <class H, class K, class V, class FA, class FP>
+template <class H, class V, class FA, class FP>
 inline void pagerankCalculateRanksOmp(vector<V>& a, const H& xt, const vector<V>& r, const vector<V>& c, V C0, V E, FA fa, FP fp) {
+  using  K = typename H::key_type;
   size_t S = xt.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K v=0; v<S; ++v) {
