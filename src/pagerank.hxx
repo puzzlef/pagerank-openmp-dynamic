@@ -364,7 +364,6 @@ inline auto pagerankAffectedFrontier(const G& x, const G& y, FT ft) {
   vector<bool> vis(max(x.span(), y.span()));
   y.forEachVertexKey([&](auto u) {
     if (!ft(u)) return;
-    vis[u] = true;
     x.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
     y.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
   });
@@ -385,13 +384,11 @@ inline auto pagerankAffectedFrontier(const G& x, const G& y, const vector<tuple<
   auto fn = [](K u) {};
   vector<bool> vis(max(x.span(), y.span()));
   for (const auto& [u, v] : deletions) {
-    vis[u] = true;
-    x.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
-  }
-  for (const auto& [u, v] : insertions) {
-    vis[u] = true;
+    vis[v] = true;
     y.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
   }
+  for (const auto& [u, v] : insertions)
+    y.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
   return vis;
 }
 
