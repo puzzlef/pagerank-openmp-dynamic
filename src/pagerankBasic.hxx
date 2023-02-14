@@ -43,7 +43,7 @@ inline int pagerankBasicSeqLoop(vector<int>& e, vector<V>& a, vector<V>& r, vect
   int l = 0;
   while (l<L) {
     V C0 = DEAD? pagerankTeleport(r, vdeg, P, N) : (1-P)/N;
-    pagerankCalculateRanks(a, c, xv, xe, C0, i, n, fa, fp); ++l;  // update ranks of vertices
+    pagerankCalculateRanks(a, r, c, xv, xe, C0, E, i, n, fa, fp); ++l;  // update ranks of vertices
     multiplyValuesW(c, a, f, i, n);        // update partial contributions (c)
     V el = pagerankError(a, r, EF, i, n);  // compare previous and current ranks
     if (!ASYNC) swap(a, r);                // final ranks in (r)
@@ -59,7 +59,7 @@ inline int pagerankBasicOmpLoop(vector<int>& e, vector<V>& a, vector<V>& r, vect
   int l = 0;
   while (l<L) {
     V C0 = DEAD? pagerankTeleportOmp(r, vdeg, P, N) : (1-P)/N;
-    pagerankCalculateRanksOmp(a, c, xv, xe, C0, i, n, fa, fp); ++l;  // update ranks of vertices
+    pagerankCalculateRanksOmp(a, r, c, xv, xe, C0, E, i, n, fa, fp); ++l;  // update ranks of vertices
     multiplyValuesOmpW(c, a, f, i, n);        // update partial contributions (c)
     V el = pagerankErrorOmp(a, r, EF, i, n);  // compare previous and current ranks
     if (!ASYNC) swap(a, r);                   // final ranks in (r)
@@ -142,6 +142,47 @@ inline PagerankResult<V> pagerankBasicDynamicTraversalOmp(const G& x, const H& x
   auto vaff = compressContainer(y, pagerankAffectedTraversal(x, y, deletions, insertions), ks);
   auto fa   = [&](K u) { return vaff[u]==true; };
   auto fp   = [ ](K u) {};
+  return pagerankOmp<ASYNC>(yt, q, o, ks, 0, N, pagerankBasicOmpLoop<ASYNC, DEAD, K, V, decltype(fa), decltype(fp)>, fa, fp);
+}
+#endif
+
+
+
+
+// FRONTIER-BASED DYNAMIC PAGERANK
+// -------------------------------
+
+/**
+ * Find the rank of each vertex in a dynamic graph.
+ * @param x original graph
+ * @param xt transpose of original graph
+ * @param y updated graph
+ * @param yt transpose of updated graph
+ * @param deletions edge deletions in batch update
+ * @param insertions edge insertions in batch update
+ * @param q initial ranks
+ * @param o pagerank options
+ * @returns pagerank result
+ */
+template <bool ASYNC=false, bool DEAD=false, class G, class H, class K, class V>
+inline PagerankResult<V> pagerankBasicDynamicFrontierSeq(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o) {
+  K    N    = yt.order();  if (N==0) return {};
+  auto ks   = vertexKeys(yt);
+  auto vaff = compressContainer(y, pagerankAffectedFrontier(x, y, deletions, insertions), ks);
+  auto fa   = [&](K u) { return vaff[u]==true; };
+  auto fp   = [&](K u) { y.forEachEdgeKey(u, [&](auto v) { vaff[v] = true; }); };
+  return pagerankSeq<ASYNC>(yt, q, o, ks, 0, N, pagerankBasicSeqLoop<ASYNC, DEAD, K, V, decltype(fa), decltype(fp)>, fa, fp);
+}
+
+
+#ifdef OPENMP
+template <bool ASYNC=false, bool DEAD=false, class G, class H, class K, class V, class FV>
+inline PagerankResult<V> pagerankBasicDynamicFrontierOmp(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o) {
+  K    N    = yt.order();  if (N==0) return {};
+  auto ks   = vertexKeys(yt);
+  auto vaff = compressContainer(y, pagerankAffectedFrontier(x, y, deletions, insertions), ks);
+  auto fa   = [&](K u) { return vaff[u]==true; };
+  auto fp   = [&](K u) { y.forEachEdgeKey(u, [&](auto v) { vaff[v] = true; }); };
   return pagerankOmp<ASYNC>(yt, q, o, ks, 0, N, pagerankBasicOmpLoop<ASYNC, DEAD, K, V, decltype(fa), decltype(fp)>, fa, fp);
 }
 #endif

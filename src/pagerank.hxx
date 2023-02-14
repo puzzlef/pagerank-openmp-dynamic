@@ -1,6 +1,7 @@
 #pragma once
 #include <utility>
 #include <vector>
+#include <cmath>
 #include <algorithm>
 #include "_main.hxx"
 #include "csr.hxx"
@@ -16,6 +17,7 @@
 using std::tuple;
 using std::vector;
 using std::move;
+using std::abs;
 using std::max;
 
 
@@ -146,24 +148,29 @@ inline V pagerankTeleportOmp(const vector<V>& r, const vector<K>& vdeg, V P, K N
 /**
  * Calculate rank for a given vertex.
  * @param a current rank of each vertex (output)
+ * @param r previous rank of each vertex
  * @param c rank contribution from each vertex
  * @param xv edge offsets for each vertex in the graph
  * @param xe target vertices for each edge in the graph
  * @param v given vertex
  * @param C0 common teleport rank contribution to each vertex
+ * @returns change in rank
  */
 template <class K, class V>
-inline void pagerankCalculateRank(vector<V>& a, const vector<V>& c, const vector<size_t>& xv, const vector<K>& xe, K v, V C0) {
+inline V pagerankCalculateRankDelta(vector<V>& a, const vector<V>& r, const vector<V>& c, const vector<size_t>& xv, const vector<K>& xe, K v, V C0) {
   V av = C0;
+  V rv = r[v];
   for (size_t i=xv[v], I=xv[v+1]; i<I; ++i)
     av += c[xe[i]];
   a[v] = av;
+  return av - rv;
 }
 
 
 /**
  * Calculate ranks for vertices in a graph.
  * @param a current rank of each vertex (output)
+ * @param r previous rank of each vertex
  * @param c rank contribution from each vertex
  * @param xv edge offsets for each vertex in the graph
  * @param xe target vertices for each edge in the graph
@@ -174,24 +181,21 @@ inline void pagerankCalculateRank(vector<V>& a, const vector<V>& c, const vector
  * @param fp per vertex processing (vertex)
  */
 template <class K, class V, class FA, class FP>
-inline void pagerankCalculateRanks(vector<V>& a, const vector<V>& c, const vector<size_t>& xv, const vector<K>& xe, V C0, K i, K n, FA fa, FP fp) {
+inline void pagerankCalculateRanks(vector<V>& a, const vector<V>& r, const vector<V>& c, const vector<size_t>& xv, const vector<K>& xe, V C0, V E, K i, K n, FA fa, FP fp) {
   for (K v=i; v<i+n; ++v) {
     if (!fa(v)) continue;
-    pagerankCalculateRank(a, c, xv, xe, v, C0);
-    fp(v);
+    if (abs(pagerankCalculateRankDelta(a, r, c, xv, xe, v, C0)) > E) fp(v);
   }
 }
 
 
 #ifdef OPENMP
 template <class K, class V, class FA, class FP>
-inline void pagerankCalculateRanksOmp(vector<V>& a, const vector<V>& c, const vector<size_t>& xv, const vector<K>& xe, V C0, K i, K n, FA fa, FP fp) {
+inline void pagerankCalculateRanksOmp(vector<V>& a, const vector<V>& r, const vector<V>& c, const vector<size_t>& xv, const vector<K>& xe, V C0, V E, K i, K n, FA fa, FP fp) {
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K v=i; v<i+n; ++v) {
     if (!fa(v)) continue;
-    int t = omp_get_thread_num();
-    pagerankCalculateRank(a, c, xv, xe, v, C0);
-    fp(v);
+    if (abs(pagerankCalculateRankDelta(a, r, c, xv, xe, v, C0)) > E) fp(v);
   }
 }
 #endif
@@ -275,6 +279,56 @@ inline auto pagerankAffectedTraversal(const G& x, const G& y, const vector<tuple
     dfsVisitedForEachW(vis, x, u, fn);
   for (const auto& [u, v] : insertions)
     dfsVisitedForEachW(vis, y, u, fn);
+  return vis;
+}
+
+
+
+
+// PAGERANK AFFECTED (FRONTIER)
+// ----------------------------
+
+/**
+ * Find affected vertices due to a batch update.
+ * @param x original graph
+ * @param y updated graph
+ * @param ft is vertex affected? (u)
+ * @returns affected flags
+ */
+template <class G, class FT>
+inline auto pagerankAffectedFrontier(const G& x, const G& y, FT ft) {
+  auto fn = [](auto u) {};
+  vector<bool> vis(max(x.span(), y.span()));
+  y.forEachVertexKey([&](auto u) {
+    if (!ft(u)) continue;
+    vis[u] = true;
+    x.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
+    y.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
+  });
+  return vis;
+}
+
+
+/**
+ * Find affected vertices due to a batch update.
+ * @param y original graph
+ * @param y updated graph
+ * @param deletions edge deletions in batch update
+ * @param insertions edge insertions in batch update
+ * @returns affected flags
+ */
+template <class G, class K>
+inline auto pagerankAffectedFrontier(const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
+  auto fn = [](K u) {};
+  vector<bool> vis(max(x.span(), y.span()));
+  for (const auto& [u, v] : deletions) {
+    vis[u] = true;
+    x.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
+  }
+  for (const auto& [u, v] : insertions) {
+    vis[u] = true;
+    y.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
+  }
   return vis;
 }
 
