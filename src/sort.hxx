@@ -1,6 +1,5 @@
 #pragma once
 #include <vector>
-#include <unordered_map>
 #include <algorithm>
 #include <utility>
 #include "_main.hxx"
@@ -86,7 +85,7 @@ template <class G, class H>
 inline auto levelwiseGroupIndices(const G& x, const H& xt) {
   using K = typename G::key_type;
   vector<K> a(x.span()); K i = 0;
-  levelwiseFrontiersDo(x, xt, [&](const auto& frnt) { fillValueAt(a, frnt, i++); });
+  levelwiseFrontiersDo(x, xt, [&](const auto& frnt) { fillValueAtU(a, frnt, i++); });
   return a;
 }
 
@@ -147,11 +146,11 @@ inline auto levelwiseComponents(const G& x, const H& xt) {
 // ----------------------------
 
 template <class G, class H, class K>
-auto levelwiseGroupedComponentsFrom(const vector2d<K>& cs, const G& b, const H& bt) {
+inline auto levelwiseGroupedComponentsFrom(const vector2d<K>& cs, const G& b, const H& bt) {
   vector2d<K> a;
   auto bgs = levelwiseGroups(b, bt);
   for (const auto& g : bgs)
-    a.push_back(joinAtVector(cs, g));
+    a.push_back(joinAt(cs, g));
   return a;
 }
 template <class G, class H>
