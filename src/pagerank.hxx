@@ -300,7 +300,7 @@ inline auto pagerankAffectedFrontier(const G& x, const G& y, FT ft) {
   auto fn = [](auto u) {};
   vector<bool> vis(max(x.span(), y.span()));
   y.forEachVertexKey([&](auto u) {
-    if (!ft(u)) continue;
+    if (!ft(u)) return;
     vis[u] = true;
     x.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });
     y.forEachEdgeKey(u, [&](auto v) { vis[v] = true; });

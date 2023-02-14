@@ -135,7 +135,7 @@ inline PagerankResult<V> pagerankBasicDynamicTraversalSeq(const G& x, const H& x
 
 
 #ifdef OPENMP
-template <bool ASYNC=false, bool DEAD=false, class G, class H, class K, class V, class FV>
+template <bool ASYNC=false, bool DEAD=false, class G, class H, class K, class V>
 inline PagerankResult<V> pagerankBasicDynamicTraversalOmp(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o) {
   K    N    = yt.order();  if (N==0) return {};
   auto ks   = vertexKeys(yt);
@@ -176,7 +176,7 @@ inline PagerankResult<V> pagerankBasicDynamicFrontierSeq(const G& x, const H& xt
 
 
 #ifdef OPENMP
-template <bool ASYNC=false, bool DEAD=false, class G, class H, class K, class V, class FV>
+template <bool ASYNC=false, bool DEAD=false, class G, class H, class K, class V>
 inline PagerankResult<V> pagerankBasicDynamicFrontierOmp(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o) {
   K    N    = yt.order();  if (N==0) return {};
   auto ks   = vertexKeys(yt);
