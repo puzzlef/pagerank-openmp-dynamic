@@ -1,5 +1,4 @@
-Comparing performance of static vs dynamic [OpenMP]-based [PageRank algorithm]
-for [link analysis].
+Design of [OpenMP]-based **Dnamic** [PageRank algorithm] for [link analysis].
 
 Dynamic graphs, which change with time, have many applications. Computing ranks
 of vertices from scratch on every update (*static PageRank*) may not be good
