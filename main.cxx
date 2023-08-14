@@ -108,7 +108,7 @@ void runExperiment(const G& x, const H& xt) {
   default_random_engine rnd(dev());
   int repeat = REPEAT_METHOD;
   // Get ranks of vertices on original graph (static).
-  auto r0   = pagerankBasicOmp(xt, init, {1, LI_NORM, 1e-100});
+  auto r0   = pagerankBasicOmp(xt, init, {1, 1e-100});
   // Get ranks of vertices on updated graph (dynamic).
   runBatches(x, rnd, [&](const auto& y, const auto& yt, double deletionsf, const auto& deletions, double insertionsf, const auto& insertions) {
     runThreads([&](int numThreads) {
@@ -120,7 +120,7 @@ void runExperiment(const G& x, const H& xt) {
             deletionsf, insertionsf, numThreads, ans.time, ans.iterations, err, technique
           );
         };
-        auto s0 = pagerankBasicOmp(yt, init, {1, LI_NORM, 1e-100});
+        auto s0 = pagerankBasicOmp(yt, init, {1, 1e-100});
         // Find multi-threaded OpenMP-based Static PageRank (synchronous, no dead ends).
         auto a0 = pagerankBasicOmp(yt, init, {repeat});
         flog(a0, s0, "pagerankBasicOmp");
