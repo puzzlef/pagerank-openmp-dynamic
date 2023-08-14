@@ -109,52 +109,6 @@ inline PagerankResult<V> pagerankBasicOmp(const H& xt, const vector<V> *q, const
 
 
 
-// TRAVERSAL-BASED DYNAMIC PAGERANK
-// --------------------------------
-
-/**
- * Find the rank of each vertex in a dynamic graph.
- * @param x original graph
- * @param xt transpose of original graph
- * @param y updated graph
- * @param yt transpose of updated graph
- * @param deletions edge deletions in batch update
- * @param insertions edge insertions in batch update
- * @param q initial ranks
- * @param o pagerank options
- * @param fv per vertex processing (thread, vertex)
- * @returns pagerank result
- */
-template <bool ASYNC=false, bool DEAD=false, class FLAG=char, class G, class H, class K, class V, class FV>
-inline PagerankResult<V> pagerankBasicDynamicTraversalSeq(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o, FV fv) {
-  if (xt.empty()) return {};
-  vector<FLAG> vaff(max(x.span(), y.span()));
-  return pagerankSeq<ASYNC>(yt, q, o, [&](auto& e, vector<V>& a, vector<V>& r, const H& xt, V P, V E, int L, int EF, vector<ThreadInfo*>& threads) {
-    auto fa = [&](K u) { return vaff[u]==FLAG(1); };
-    auto fr = [ ](K u, V eu) {};
-    pagerankAffectedTraversalW(vaff, x, y, deletions, insertions);
-    return pagerankBasicSeqLoop<ASYNC, DEAD>(e, a, r, xt, P, E, L, EF, threads, fv, fa, fr);
-  });
-}
-
-
-#ifdef OPENMP
-template <bool ASYNC=false, bool DEAD=false, class FLAG=char, class G, class H, class K, class V, class FV>
-inline PagerankResult<V> pagerankBasicDynamicTraversalOmp(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o, FV fv) {
-  if (xt.empty()) return {};
-  vector<FLAG> vaff(max(x.span(), y.span()));
-  return pagerankOmp<ASYNC>(yt, q, o, [&](auto& e, vector<V>& a, vector<V>& r, const H& xt, V P, V E, int L, int EF, vector<ThreadInfo*>& threads) {
-    auto fa = [&](K u) { return vaff[u]==FLAG(1); };
-    auto fr = [ ](K u, V eu) {};
-    pagerankAffectedTraversalOmpW(vaff, x, y, deletions, insertions);
-    return pagerankBasicOmpLoop<ASYNC, DEAD>(e, a, r, xt, P, E, L, EF, threads, fv, fa, fr);
-  });
-}
-#endif
-
-
-
-
 // FRONTIER-BASED DYNAMIC PAGERANK
 // -------------------------------
 
@@ -171,8 +125,8 @@ inline PagerankResult<V> pagerankBasicDynamicTraversalOmp(const G& x, const H& x
  * @param fv per vertex processing (thread, vertex)
  * @returns pagerank result
  */
-template <bool ASYNC=false, bool DEAD=false, class FLAG=char, class G, class H, class K, class V, class FV>
-inline PagerankResult<V> pagerankBasicDynamicFrontierSeq(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o, FV fv) {
+template <bool ASYNC=false, bool DEAD=false, class FLAG=char, class G, class H, class K, class V, class W, class FV>
+inline PagerankResult<V> pagerankBasicDynamicFrontierSeq(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K, W>>& insertions, const vector<V> *q, const PagerankOptions<V>& o, FV fv) {
   V D = 0.001 * o.tolerance;  // see adjust-tolerance
   if (xt.empty()) return {};
   vector<FLAG> vaff(max(x.span(), y.span()));
@@ -186,8 +140,8 @@ inline PagerankResult<V> pagerankBasicDynamicFrontierSeq(const G& x, const H& xt
 
 
 #ifdef OPENMP
-template <bool ASYNC=false, bool DEAD=false, class FLAG=char, class G, class H, class K, class V, class FV>
-inline PagerankResult<V> pagerankBasicDynamicFrontierOmp(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o, FV fv) {
+template <bool ASYNC=false, bool DEAD=false, class FLAG=char, class G, class H, class K, class V, class W, class FV>
+inline PagerankResult<V> pagerankBasicDynamicFrontierOmp(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K, W>>& insertions, const vector<V> *q, const PagerankOptions<V>& o, FV fv) {
   V D = 0.001 * o.tolerance;  // see adjust-tolerance
   if (xt.empty()) return {};
   vector<FLAG> vaff(max(x.span(), y.span()));

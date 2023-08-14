@@ -272,9 +272,9 @@ inline void pagerankCalculateRanksOmp(vector<V>& a, const H& xt, const vector<V>
 template <class V>
 inline V pagerankError(const vector<V>& x, const vector<V>& y, int EF) {
   switch (EF) {
-    case 1:  return l1Norm(x, y);
-    case 2:  return l2Norm(x, y);
-    default: return liNorm(x, y);
+    case 1:  return l1NormDelta(x, y);
+    case 2:  return l2NormDelta(x, y);
+    default: return liNormDelta(x, y);
   }
 }
 
@@ -283,70 +283,9 @@ inline V pagerankError(const vector<V>& x, const vector<V>& y, int EF) {
 template <class V>
 inline V pagerankErrorOmp(const vector<V>& x, const vector<V>& y, int EF) {
   switch (EF) {
-    case 1:  return l1NormOmp(x, y);
-    case 2:  return l2NormOmp(x, y);
-    default: return liNormOmp(x, y);
-  }
-}
-#endif
-
-
-
-
-// PAGERANK AFFECTED (TRAVERSAL)
-// -----------------------------
-
-/**
- * Find affected vertices due to a batch update.
- * @param vis affected flags (output)
- * @param x original graph
- * @param y updated graph
- * @param ft is vertex affected? (u)
- */
-template <class B, class G, class FT>
-inline void pagerankAffectedTraversalW(vector<B>& vis, const G& x, const G& y, FT ft) {
-  auto fn = [](auto u) {};
-  y.forEachVertexKey([&](auto u) {
-    if (!ft(u)) return;
-    dfsVisitedForEachW(vis, x, u, fn);
-    dfsVisitedForEachW(vis, y, u, fn);
-  });
-}
-
-
-/**
- * Find affected vertices due to a batch update.
- * @param vis affected flags (output)
- * @param x original graph
- * @param y updated graph
- * @param deletions edge deletions in batch update
- * @param insertions edge insertions in batch update
- */
-template <class B, class G, class K>
-inline void pagerankAffectedTraversalW(vector<B>& vis, const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
-  auto fn = [](K u) {};
-  for (const auto& [u, v] : deletions)
-    dfsVisitedForEachW(vis, x, u, fn);
-  for (const auto& [u, v] : insertions)
-    dfsVisitedForEachW(vis, y, u, fn);
-}
-
-
-#ifdef OPENMP
-template <class B, class G, class K>
-inline void pagerankAffectedTraversalOmpW(vector<B>& vis, const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
-  auto  fn = [](K u) {};
-  size_t D = deletions.size();
-  size_t I = insertions.size();
-  #pragma omp parallel for schedule(auto)
-  for (size_t i=0; i<D; ++i) {
-    K u = get<0>(deletions[i]);
-    dfsVisitedForEachW(vis, x, u, fn);
-  }
-  #pragma omp parallel for schedule(auto)
-  for (size_t i=0; i<I; ++i) {
-    K u = get<0>(insertions[i]);
-    dfsVisitedForEachW(vis, y, u, fn);
+    case 1:  return l1NormDeltaOmp(x, y);
+    case 2:  return l2NormDeltaOmp(x, y);
+    default: return liNormDeltaOmp(x, y);
   }
 }
 #endif
@@ -382,8 +321,8 @@ inline void pagerankAffectedFrontierW(vector<B>& vis, const G& x, const G& y, FT
  * @param deletions edge deletions in batch update
  * @param insertions edge insertions in batch update
  */
-template <class B, class G, class K>
-inline void pagerankAffectedFrontierW(vector<B>& vis, const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
+template <class B, class G, class K, class E>
+inline void pagerankAffectedFrontierW(vector<B>& vis, const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K, E>>& insertions) {
   for (const auto& [u, v] : deletions)
     x.forEachEdgeKey(u, [&](auto v) { vis[v] = B(1); });
   for (const auto& [u, v] : insertions)
@@ -392,8 +331,8 @@ inline void pagerankAffectedFrontierW(vector<B>& vis, const G& x, const G& y, co
 
 
 #ifdef OPENMP
-template <class B, class G, class K>
-inline void pagerankAffectedFrontierOmpW(vector<B>& vis, const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
+template <class B, class G, class K, class E>
+inline void pagerankAffectedFrontierOmpW(vector<B>& vis, const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K, E>>& insertions) {
   size_t D = deletions.size();
   size_t I = insertions.size();
   #pragma omp parallel for schedule(auto)

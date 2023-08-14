@@ -31,43 +31,6 @@ using namespace std;
 
 
 
-// GENERATE BATCH
-// --------------
-
-template <class G, class R>
-inline auto addRandomEdges(G& a, R& rnd, size_t batchSize, size_t i, size_t n) {
-  using K = typename G::key_type;
-  int retries = 5;
-  vector<tuple<K, K>> insertions;
-  auto fe = [&](auto u, auto v, auto w) {
-    a.addEdge(u, v);
-    insertions.push_back(make_tuple(u, v));
-  };
-  for (size_t l=0; l<batchSize; ++l)
-    retry([&]() { return addRandomEdge(a, rnd, i, n, None(), fe); }, retries);
-  updateOmpU(a);
-  return insertions;
-}
-
-
-template <class G, class R>
-inline auto removeRandomEdges(G& a, R& rnd, size_t batchSize, size_t i, size_t n) {
-  using K = typename G::key_type;
-  int retries = 5;
-  vector<tuple<K, K>> deletions;
-  auto fe = [&](auto u, auto v) {
-    a.removeEdge(u, v);
-    deletions.push_back(make_tuple(u, v));
-  };
-  for (size_t l=0; l<batchSize; ++l)
-    retry([&]() { return removeRandomEdge(a, rnd, i, n, fe); }, retries);
-  updateOmpU(a);
-  return deletions;
-}
-
-
-
-
 // PERFORM EXPERIMENT
 // ------------------
 
@@ -80,8 +43,8 @@ inline void runAbsoluteBatches(const G& x, R& rnd, F fn) {
     for (int r=0; r<REPEAT_BATCH; ++r) {
       auto y  = duplicate(x);
       auto deletions  = removeRandomEdges(y, rnd, d, 1, x.span()-1);
-      auto insertions = addRandomEdges   (y, rnd, i, 1, x.span()-1);
-      selfLoopOmpU(y, None(), fl);
+      auto insertions = addRandomEdges   (y, rnd, i, 1, x.span()-1, None());
+      addSelfLoopsOmpU(y, None(), fl);
       auto yt = transposeWithDegreeOmp(y);
       fn(y, yt, d, deletions, i, insertions);
     }
@@ -103,8 +66,8 @@ inline void runRelativeBatches(const G& x, R& rnd, F fn) {
     for (int r=0; r<REPEAT_BATCH; ++r) {
       auto y  = duplicate(x);
       auto deletions  = removeRandomEdges(y, rnd, size_t(d * x.size() + 0.5), 1, x.span()-1);
-      auto insertions = addRandomEdges   (y, rnd, size_t(i * x.size() + 0.5), 1, x.span()-1);
-      selfLoopOmpU(y, None(), fl);
+      auto insertions = addRandomEdges   (y, rnd, size_t(i * x.size() + 0.5), 1, x.span()-1, None());
+      addSelfLoopsOmpU(y, None(), fl);
       auto yt = transposeWithDegreeOmp(y);
       fn(y, yt, d, deletions, i, insertions);
     }
@@ -152,7 +115,7 @@ void runExperiment(const G& x, const H& xt) {
     runThreads([&](int numThreads) {
         // Follow a specific result logging format, which can be easily parsed later.
         auto flog  = [&](const auto& ans, const auto& ref, const char *technique) {
-          auto err = liNormOmp(ans.ranks, ref.ranks);
+          auto err = liNormDeltaOmp(ans.ranks, ref.ranks);
           printf(
             "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %03d iter, %.2e err} %s\n",
             deletionsf, insertionsf, numThreads, ans.time, ans.iterations, err, technique
@@ -178,10 +141,10 @@ int main(int argc, char **argv) {
   omp_set_num_threads(MAX_THREADS);
   LOG("OMP_NUM_THREADS=%d\n", MAX_THREADS);
   LOG("Loading graph %s ...\n", file);
-  OutDiGraph<uint32_t> x;
+  DiGraph<uint32_t> x;
   readMtxOmpW(x, file); LOG(""); println(x);
   auto fl = [](auto u) { return true; };
-  x = selfLoopOmp(x, None(), fl);      LOG(""); print(x);  printf(" (selfLoopAllVertices)\n");
+  x = addSelfLoopsOmp(x, None(), fl);  LOG(""); print(x);  printf(" (selfLoopAllVertices)\n");
   auto xt = transposeWithDegreeOmp(x); LOG(""); print(xt); printf(" (transposeWithDegree)\n");
   runExperiment(x, xt);
   printf("\n");
