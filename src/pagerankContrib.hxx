@@ -32,8 +32,7 @@ inline V pagerankCalculateContrib(vector<V>& a, const H& xt, const vector<V>& c,
   V cv = c[v];
   K  d = xt.vertexValue(v);
   xt.forEachEdgeKey(v, [&](auto u) { av += c[u]; });
-  av   = C0 +  P * av;
-  av   = d? av/d : av;
+  av   = (C0 + P * av)/d;
   a[v] = av;
   return abs(av - cv);
 }
@@ -101,8 +100,7 @@ inline void pagerankInitializeContribs(vector<V>& a, vector<V>& c, const H& xt) 
   size_t N = xt.order();
   for (K v=0; v<S; ++v) {
     K  d = xt.vertexValue(v);
-    V  D = d? V(1)/d : V(1);
-    c[v] = xt.hasVertex(v)? D/N : V();
+    c[v] = xt.hasVertex(v)? (V(1)/d)/N : V();
     if (!ASYNC) a[v] = c[v];
   }
 }
@@ -123,8 +121,7 @@ inline void pagerankInitializeContribsOmp(vector<V>& a, vector<V>& c, const H& x
   #pragma omp parallel for schedule(auto)
   for (K v=0; v<S; ++v) {
     K  d = xt.vertexValue(v);
-    V  D = d? V(1)/d : V(1);
-    c[v] = xt.hasVertex(v)? D/N : V();
+    c[v] = xt.hasVertex(v)? (V(1)/d)/N : V();
     if (!ASYNC) a[v] = c[v];
   }
 }
@@ -144,7 +141,7 @@ inline void pagerankInitializeContribsFrom(vector<V>& a, vector<V>& c, const H& 
   size_t S = xt.span();
   for (K v=0; v<S; ++v) {
     K  d = xt.vertexValue(v);
-    c[v] = d? q[v] / d : q[v];
+    c[v] = q[v] / d;
     if (!ASYNC) a[v] = c[v];
   }
 }
@@ -165,7 +162,7 @@ inline void pagerankInitializeContribsFromOmp(vector<V>& a, vector<V>& c, const 
   #pragma omp parallel for schedule(auto)
   for (K v=0; v<S; ++v) {
     K  d = xt.vertexValue(v);
-    c[v] = d? q[v] / d : q[v];
+    c[v] = q[v] / d;
     if (!ASYNC) a[v] = c[v];
   }
 }
@@ -188,7 +185,7 @@ inline void pagerankContribRanks(vector<V>& a, const H& xt, const vector<V>& c) 
   size_t S = xt.span();
   for (K v=0; v<S; ++v) {
     K  d = xt.vertexValue(v);
-    a[v] = xt.hasVertex(v)? (d? d * c[v] : c[v]) : V();
+    a[v] = xt.hasVertex(v)? d * c[v] : V();
   }
 }
 
@@ -207,7 +204,7 @@ inline void pagerankContribRanksOmp(vector<V>& a, const H& xt, const vector<V>& 
   #pragma omp parallel for schedule(auto)
   for (K v=0; v<S; ++v) {
     K  d = xt.vertexValue(v);
-    a[v] = xt.hasVertex(v)? (d? d * c[v] : c[v]) : V();
+    a[v] = xt.hasVertex(v)? d * c[v] : V();
   }
 }
 #endif
@@ -292,8 +289,8 @@ inline V pagerankDeltaContribs(const H& xt, const vector<V>& a, const vector<V>&
   V e = V();
   xt.forEachVertexKey([&](auto v) {
     K d  = xt.vertexValue(v);
-    V av = d? d * a[v] : a[v];
-    V rv = d? d * c[v] : c[v];
+    V av = d * a[v];
+    V rv = d * c[v];
     e = max(e, abs(av - rv));
   });
   return e;
@@ -317,8 +314,8 @@ inline V pagerankDeltaContribsOmp(const H& xt, const vector<V>& a, const vector<
   for (K v=0; v<S; ++v) {
     if (!xt.hasVertex(v)) continue;
     K d  = xt.vertexValue(v);
-    V av = d? d * a[v] : a[v];
-    V rv = d? d * c[v] : c[v];
+    V av = d * a[v];
+    V rv = d * c[v];
     e = max(e, abs(av - rv));
   }
   return e;
