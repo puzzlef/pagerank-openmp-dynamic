@@ -108,8 +108,7 @@ void runExperiment(const G& x, const H& xt) {
   default_random_engine rnd(dev());
   int repeat = REPEAT_METHOD;
   // Get ranks of vertices on original graph (static).
-  auto fnop = [&](ThreadInfo *thread, auto v) {};
-  auto r0   = pagerankBasicOmp(xt, init, {1, LI_NORM, 1e-100}, fnop);
+  auto r0   = pagerankBasicOmp(xt, init, {1, LI_NORM, 1e-100});
   // Get ranks of vertices on updated graph (dynamic).
   runBatches(x, rnd, [&](const auto& y, const auto& yt, double deletionsf, const auto& deletions, double insertionsf, const auto& insertions) {
     runThreads([&](int numThreads) {
@@ -121,15 +120,15 @@ void runExperiment(const G& x, const H& xt) {
             deletionsf, insertionsf, numThreads, ans.time, ans.iterations, err, technique
           );
         };
-        auto s0 = pagerankBasicOmp(yt, init, {1, LI_NORM, 1e-100}, fnop);
+        auto s0 = pagerankBasicOmp(yt, init, {1, LI_NORM, 1e-100});
         // Find multi-threaded OpenMP-based Static PageRank (synchronous, no dead ends).
-        auto a0 = pagerankBasicOmp(yt, init, {repeat}, fnop);
+        auto a0 = pagerankBasicOmp(yt, init, {repeat});
         flog(a0, s0, "pagerankBasicOmp");
         // Find multi-threaded OpenMP-based Naive-dynamic PageRank (synchronous, no dead ends).
-        auto a1 = pagerankBasicOmp(yt, &r0.ranks, {repeat}, fnop);
+        auto a1 = pagerankBasicOmp(yt, &r0.ranks, {repeat});
         flog(a1, s0, "pagerankBasicNaiveDynamicOmp");
         // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank (synchronous, no dead ends).
-        auto a2 = pagerankBasicDynamicFrontierOmp(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat}, fnop);
+        auto a2 = pagerankBasicDynamicFrontierOmp(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat});
         flog(a2, s0, "pagerankBasicDynamicFrontierOmp");
       });
     });
