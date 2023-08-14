@@ -295,13 +295,12 @@ PagerankResult<V> pagerankSeq(const H& xt, const vector<V> *q, const PagerankOpt
   V   E  = o.tolerance;
   int L  = o.maxIterations, l = 0;
   int EF = o.toleranceNorm;
-  vector<FLAG> e(S); vector<V> a(S), r(S);
+  vector<V> a(S), r(S);
   float t = measureDuration([&]() {
-    fillValueU(e, 0);
     if (q) copyValuesW(r, *q);
     else   fillValueU (r, V(1)/N);
     if (!ASYNC) copyValuesW(a, r);
-    l = fl(e, ASYNC? r : a, r, xt, P, E, L, EF);
+    l = fl(ASYNC? r : a, r, xt, P, E, L, EF);
   }, o.repeat);
   return {r, l, t};
 }
@@ -332,13 +331,12 @@ PagerankResult<V> pagerankOmp(const H& xt, const vector<V> *q, const PagerankOpt
   int L  = o.maxIterations, l = 0;
   int EF = o.toleranceNorm;
   int TH = omp_get_max_threads();
-  vector<FLAG> e(S); vector<V> a(S), r(S);
+  vector<V> a(S), r(S);
   float t = measureDuration([&]() {
-    fillValueU(e, FLAG());
     if (q) copyValuesOmpW(r, *q);
     else   fillValueOmpU (r, V(1)/N);
     if (!ASYNC) copyValuesOmpW(a, r);
-    l = fl(e, ASYNC? r : a, r, xt, P, E, L, EF);
+    l = fl(ASYNC? r : a, r, xt, P, E, L, EF);
   }, o.repeat);
   return {r, l, t};
 }
