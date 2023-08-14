@@ -69,49 +69,6 @@ struct PagerankResult {
 
 
 
-// PAGERANK TELEPORT
-// -----------------
-// For teleport contribution from vertices (inc. dead ends).
-
-/**
- * Find total teleport contribution from each vertex (inc. dead ends).
- * @param xt transpose of original graph
- * @param r rank of each vertex
- * @param P damping factor [0.85]
- * @returns common teleport rank contribution to each vertex
- */
-template <class H, class V>
-inline V pagerankTeleport(const H& xt, const vector<V>& r, V P) {
-  using  K = typename H::key_type;
-  size_t N = xt.order();
-  V a = (1-P)/N;
-  xt.forEachVertex([&](auto u, auto d) {
-    if (d==0) a += P * r[u]/N;
-  });
-  return a;
-}
-
-
-#ifdef OPENMP
-template <class H, class V>
-inline V pagerankTeleportOmp(const H& xt, const vector<V>& r, V P) {
-  using  K = typename H::key_type;
-  size_t S = xt.span();
-  size_t N = xt.order();
-  V a = (1-P)/N;
-  #pragma omp parallel for schedule(auto) reduction(+:a)
-  for (K u=0; u<S; ++u) {
-    if (!xt.hasVertex(u)) continue;
-    K   d = xt.vertexValue(u);
-    if (d==0) a += P * r[u]/N;
-  }
-  return a;
-}
-#endif
-
-
-
-
 // PAGERANK CALCULATE
 // ------------------
 // For rank calculation from in-edges.
