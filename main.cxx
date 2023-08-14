@@ -121,15 +121,21 @@ void runExperiment(const G& x, const H& xt) {
           );
         };
         auto s0 = pagerankBasicOmp(yt, init, {1, 1e-100});
-        // Find multi-threaded OpenMP-based Static PageRank (synchronous, no dead ends).
+        // Find multi-threaded OpenMP-based Static PageRank.
         auto a0 = pagerankBasicOmp(yt, init, {repeat});
         flog(a0, s0, "pagerankBasicOmp");
-        // Find multi-threaded OpenMP-based Naive-dynamic PageRank (synchronous, no dead ends).
+        auto b0 = pagerankContribOmp(yt, init, {repeat});
+        flog(b0, s0, "pagerankContribOmp");
+        // Find multi-threaded OpenMP-based Naive-dynamic PageRank.
         auto a1 = pagerankBasicOmp(yt, &r0.ranks, {repeat});
         flog(a1, s0, "pagerankBasicNaiveDynamicOmp");
-        // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank (synchronous, no dead ends).
+        auto b1 = pagerankContribOmp(yt, &r0.ranks, {repeat});
+        flog(b1, s0, "pagerankContribNaiveDynamicOmp");
+        // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank.
         auto a2 = pagerankBasicDynamicFrontierOmp(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat});
         flog(a2, s0, "pagerankBasicDynamicFrontierOmp");
+        auto b2 = pagerankContribDynamicFrontierOmp(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat});
+        flog(b2, s0, "pagerankContribDynamicFrontierOmp");
       });
     });
 }

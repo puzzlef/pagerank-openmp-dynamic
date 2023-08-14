@@ -314,6 +314,38 @@ inline PagerankResult<V> pagerankBasicInvokeOmp(const H& xt, const vector<V> *q,
 
 
 
+#pragma region DELTA RANKS
+/**
+ * Calculate rank delta between two rank vectors.
+ * @param xt transpose of original graph
+ * @param a current rank of each vertex
+ * @param r previous rank of each vertex
+ * @returns ||a - r||_∞
+ */
+template <class H, class V>
+inline V pagerankDeltaRanks(const H& xt, const vector<V>& a, const vector<V>& r) {
+  return liNormDelta(a, r);
+}
+
+
+#ifdef OPENMP
+/**
+ * Calculate rank delta between two rank vectors (using OpenMP).
+ * @param xt transpose of original graph
+ * @param a current rank of each vertex
+ * @param r previous rank of each vertex
+ * @returns ||a - r||_∞
+ */
+template <class H, class V>
+inline V pagerankDeltaRanksOmp(const H& xt, const vector<V>& a, const vector<V>& r) {
+  return liNormDeltaOmp(a, r);
+}
+#endif
+#pragma endregion
+
+
+
+
 #pragma region COMPUTATION LOOP
 /**
  * Perform PageRank iterations upon a graph.
@@ -335,9 +367,9 @@ inline int pagerankBasicLoop(vector<V>& a, vector<V>& r, const H& xt, V P, V E, 
   V  C0 = (1-P)/N;
   while (l<L) {
     pagerankCalculateRanks(a, xt, r, C0, P, fa, fr); ++l;  // Update ranks of vertices
-    V el = liNormDelta(a, r);  // Compare previous and current ranks
-    if (!ASYNC) swap(a, r);    // Final ranks in (r)
-    if (el<E) break;           // Check tolerance
+    V el = pagerankDeltaRanks(xt, a, r);  // Compare previous and current ranks
+    if (!ASYNC) swap(a, r);               // Final ranks in (r)
+    if (el<E) break;                      // Check tolerance
   }
   return l;
 }
@@ -364,9 +396,9 @@ inline int pagerankBasicLoopOmp(vector<V>& a, vector<V>& r, const H& xt, V P, V 
   V  C0 = (1-P)/N;
   while (l<L) {
     pagerankCalculateRanksOmp(a, xt, r, C0, P, fa, fr); ++l;  // Update ranks of vertices
-    V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
-    if (!ASYNC) swap(a, r);       // Final ranks in (r)
-    if (el<E) break;              // Check tolerance
+    V el = pagerankDeltaRanksOmp(xt, a, r);  // Compare previous and current ranks
+    if (!ASYNC) swap(a, r);                  // Final ranks in (r)
+    if (el<E) break;                         // Check tolerance
   }
   return l;
 }
