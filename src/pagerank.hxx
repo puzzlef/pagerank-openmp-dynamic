@@ -281,8 +281,6 @@ inline PagerankResult<V> pagerankInvoke(const H& xt, const vector<V> *q, const P
 }
 
 
-
-
 #ifdef OPENMP
 /**
  * Setup environment and find the rank of each vertex in a graph (using OpenMP).
