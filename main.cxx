@@ -124,12 +124,18 @@ void runExperiment(const G& x, const H& xt) {
         // Find multi-threaded OpenMP-based Static PageRank.
         auto a0 = pagerankNaiveDynamicOmp(yt, init, {repeat});
         flog(a0, s0, "pagerankStaticOmp");
+        auto b0 = pagerankPruneNaiveDynamicOmp(y, yt, init, {repeat});
+        flog(b0, s0, "pagerankPruneStaticOmp");
         // Find multi-threaded OpenMP-based Naive-dynamic PageRank.
         auto a1 = pagerankNaiveDynamicOmp(yt, &r0.ranks, {repeat});
         flog(a1, s0, "pagerankNaiveDynamicOmp");
+        auto b1 = pagerankPruneNaiveDynamicOmp(y, yt, &r0.ranks, {repeat});
+        flog(b1, s0, "pagerankPruneNaiveDynamicOmp");
         // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank.
         auto a2 = pagerankDynamicFrontierOmp(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat});
         flog(a2, s0, "pagerankDynamicFrontierOmp");
+        auto b2 = pagerankPruneDynamicFrontierOmp(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat});
+        flog(b2, s0, "pagerankPruneDynamicFrontierOmp");
       });
     });
 }

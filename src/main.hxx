@@ -13,3 +13,4 @@
 #include "bfs.hxx"
 #include "batch.hxx"
 #include "pagerank.hxx"
+#include "pagerankPrune.hxx"
