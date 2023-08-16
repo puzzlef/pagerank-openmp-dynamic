@@ -34,7 +34,8 @@ inline V pagerankPruneCalculateRank(vector<V>& a, const H& xt, const vector<V>& 
     K d = xt.vertexValue(u);
     av += r[u]/d;
   });
-  av   = C0 + P * av;
+  K d  = xt.vertexValue(v);
+  av   = (C0 + P * (av - rv/d)) * (1/(1-(P/d)));  // av = C0 + P * av;
   a[v] = av;
   return abs(av - rv);
 }
@@ -55,7 +56,7 @@ inline V pagerankPruneCalculateRank(vector<V>& a, const H& xt, const vector<V>& 
 template <bool ASYNC=false, class G, class H, class V, class B>
 inline void pagerankPruneCalculateRanks(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<V>& r, const vector<B>& vaff, V C0, V P, V D) {
   xt.forEachVertexKey([&](auto u) {
-    if (!vaff[u]) return;
+    if (!vaff[u]) { a[u] = r[u]; return; }
     V ev = pagerankPruneCalculateRank(a, xt, r, u, C0, P);
     if (ev>D) x.forEachEdgeKey(u, [&](auto v) { if (v!=u) vafe[v] = B(1); });
     if (ASYNC) vafe[u] = B(0);
@@ -82,7 +83,8 @@ inline void pagerankPruneCalculateRanksOmp(vector<V>& a, vector<B>& vafe, const 
   size_t S = xt.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K u=0; u<S; ++u) {
-    if (!xt.hasVertex(u) || !vaff[u]) continue;
+    if (!xt.hasVertex(u)) continue;
+    if (!vaff[u]) { a[u] = r[u]; continue; }
     V ev = pagerankPruneCalculateRank(a, xt, r, u, C0, P);
     if (ev>D) x.forEachEdgeKey(u, [&](auto v) { if (v!=u) vafe[v] = B(1); });
     if (ASYNC) vafe[u] = B(0);
