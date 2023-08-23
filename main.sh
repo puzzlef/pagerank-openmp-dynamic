@@ -14,7 +14,7 @@ cd $src
 # Fixed config
 : "${TYPE:=double}"
 : "${MAX_THREADS:=32}"
-: "${REPEAT_BATCH:=5}"
+: "${REPEAT_BATCH:=1}"
 : "${REPEAT_METHOD:=1}"
 # Parameter sweep for batch (randomly generated)
 : "${BATCH_UNIT:=%}"
