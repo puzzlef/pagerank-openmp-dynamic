@@ -5,7 +5,7 @@ const path = require('path');
 const ROMPTH = /^OMP_NUM_THREADS=(\d+)/m;
 const RGRAPH = /^Loading graph .*\/(.+?)\.mtx \.\.\./m;
 const RORDER = /^order: (\d+) size: (\d+) \[directed\] \{\}/m;
-const RRESLT = /^\{\-(.+?)\/\+(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?) iter, (.+?) err\} (\w+)/m;
+const RRESLT = /^\{\-(.+?)\/\+(.+?) batchf, (.+?) threads, (.+?) frontier, (.+?) prune\} -> \{(.+?)ms, (.+?) iter, (.+?) err\} (\w+)/m;
 
 
 
@@ -58,16 +58,18 @@ function readLogLine(ln, data, state) {
     state.order = parseFloat(order);
     state.size  = parseFloat(size);
   }
-  // const RRESLT = /^\{\-(.+?)\/\+(.+?) batchf, (.+?) threads\} -> \{(.+?)ms, (.+?) iter, (.+?) err\} (\w+)/m;
   else if (RRESLT.test(ln)) {
     var [,
       batch_deletions_fraction, batch_insertions_fraction, max_threads,
+      frontier_tolerance, prune_tolerance,
       time, iterations, error, technique,
     ] = RRESLT.exec(ln);
     data.get(state.graph).push(Object.assign({}, state, {
       batch_deletions_fraction:  parseFloat(batch_deletions_fraction),
       batch_insertions_fraction: parseFloat(batch_insertions_fraction),
-      max_threads: parseFloat(max_threads),
+      max_threads:        parseFloat(max_threads),
+      frontier_tolerance: parseFloat(frontier_tolerance),
+      prune_tolerance:    parseFloat(prune_tolerance),
       time:        parseFloat(time),
       iterations:  parseFloat(iterations),
       error:       parseFloat(error),
