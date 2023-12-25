@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
-#include "src/main.hxx"
+#include "inc/main.hxx"
 
 using namespace std;
 
