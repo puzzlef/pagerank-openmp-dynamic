@@ -99,12 +99,11 @@ inline bool addRandomEdge(R& rnd, const G& x, size_t i, size_t n, V w, FE fe) {
 template <class R, class G>
 inline auto generateEdgeDeletions(R& rnd, const G& x, size_t batchSize, size_t i, size_t n, bool undirected) {
   using K = typename G::key_type;
-  using V = typename G::edge_value_type;
   int retries = 5;
-  vector<tuple<K, K, V>> deletions;
+  vector<tuple<K, K>> deletions;
   auto fe = [&](auto u, auto v, auto w) {
-    deletions.push_back(make_tuple(u, v, w));
-    if (undirected) deletions.push_back(make_tuple(v, u, w));
+    deletions.push_back(make_tuple(u, v));
+    if (undirected) deletions.push_back(make_tuple(v, u));
     return true;
   };
   for (size_t l=0; l<batchSize; ++l)
@@ -122,16 +121,16 @@ inline auto generateEdgeDeletions(R& rnd, const G& x, size_t batchSize, size_t i
  * @param n number of vertices / range
  * @param undirected add undirected edges?
  * @param w edge weight
- * @returns inserted edges {u, v, w}
+ * @returns inserted edges {u, v}
  */
 template <class R, class G, class V>
 inline auto generateEdgeInsertions(R& rnd, const G& x, size_t batchSize, size_t i, size_t n, bool undirected, V w) {
   using K = typename G::key_type;
   int retries = 5;
-  vector<tuple<K, K, V>> insertions;
+  vector<tuple<K, K>> insertions;
   auto fe = [&](auto u, auto v, auto w) {
-    insertions.push_back(make_tuple(u, v, w));
-    if (undirected) insertions.push_back(make_tuple(v, u, w));
+    insertions.push_back(make_tuple(u, v));
+    if (undirected) insertions.push_back(make_tuple(v, u));
     return true;
   };
   for (size_t l=0; l<batchSize; ++l)
@@ -150,10 +149,10 @@ inline auto generateEdgeInsertions(R& rnd, const G& x, size_t batchSize, size_t 
  * @param x original graph
  * @param exists true to keep existing edges, false to keep non-existing edges
  */
-template <class G, class K, class V>
-inline void filterEdgesByExistenceU(vector<tuple<K, K, V>>& edges, const G& x, bool exists) {
+template <class G, class K>
+inline void filterEdgesByExistenceU(vector<tuple<K, K>>& edges, const G& x, bool exists) {
   auto ft = [&](const auto& e) {
-    auto [u, v, w] = e;
+    auto [u, v] = e;
     return x.hasEdge(u, v) != exists;
   };
   auto it = remove_if(edges.begin(), edges.end(), ft);
@@ -165,11 +164,11 @@ inline void filterEdgesByExistenceU(vector<tuple<K, K, V>>& edges, const G& x, b
  * Sort edges in batch update by source/destination vertex.
  * @param edges edges in batch update (updated)
  */
-template <class K, class V>
-inline void sortEdgesByIdU(vector<tuple<K, K, V>>& edges) {
+template <class K>
+inline void sortEdgesByIdU(vector<tuple<K, K>>& edges) {
   auto fl = [](const auto& a, const auto& b) {
-    auto [u1, v1, w1] = a;
-    auto [u2, v2, w2] = b;
+    auto [u1, v1] = a;
+    auto [u2, v2] = b;
     return u1 < u2 || (u1 == u2 && v1 < v2);
   };
   sort(edges.begin(), edges.end(), fl);
@@ -180,11 +179,11 @@ inline void sortEdgesByIdU(vector<tuple<K, K, V>>& edges) {
  * Keep only unique edges in batch update.
  * @param edges edges in batch update (updated)
  */
-template <class K, class V>
-inline void uniqueEdgesU(vector<tuple<K, K, V>>& edges) {
+template <class K>
+inline void uniqueEdgesU(vector<tuple<K, K>>& edges) {
   auto fe = [](const auto& a, const auto& b) {
-    auto [u1, v1, w1] = a;
-    auto [u2, v2, w2] = b;
+    auto [u1, v1] = a;
+    auto [u2, v2] = b;
     return u1 == u2 && v1 == v2;
   };
   auto it = unique(edges.begin(), edges.end(), fe);
@@ -198,8 +197,8 @@ inline void uniqueEdgesU(vector<tuple<K, K, V>>& edges) {
  * @param insertions edge insertions in batch update (updated)
  * @param x original graph
  */
-template <class G, class K, class V>
-inline void tidyBatchUpdateU(vector<tuple<K, K, V>>& deletions, vector<tuple<K, K, V>>& insertions, const G& x) {
+template <class G, class K>
+inline void tidyBatchUpdateU(vector<tuple<K, K>>& deletions, vector<tuple<K, K>>& insertions, const G& x) {
   filterEdgesByExistenceU(deletions,  x, true);
   filterEdgesByExistenceU(insertions, x, false);
   sortEdgesByIdU(deletions);
@@ -219,13 +218,13 @@ inline void tidyBatchUpdateU(vector<tuple<K, K, V>>& deletions, vector<tuple<K, 
  * @param deletions edge deletions in batch update
  * @param insertions edge insertions in batch update
  */
-template <class G, class K, class V>
-inline void applyBatchUpdateU(G& a, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions) {
-  for (auto [u, v, w] : deletions)
+template <class G, class K>
+inline void applyBatchUpdateU(G& a, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
+  for (auto [u, v] : deletions)
     a.removeEdge(u, v);
   updateU(a);
-  for (auto [u, v, w] : insertions)
-    a.addEdge(u, v, w);
+  for (auto [u, v] : insertions)
+    a.addEdge(u, v);
   updateU(a);
 }
 
@@ -237,13 +236,13 @@ inline void applyBatchUpdateU(G& a, const vector<tuple<K, K, V>>& deletions, con
  * @param deletions edge deletions in batch update
  * @param insertions edge insertions in batch update
  */
-template <class G, class K, class V>
-inline void applyBatchUpdateOmpU(G& a, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions) {
-  for (auto [u, v, w] : deletions)
+template <class G, class K>
+inline void applyBatchUpdateOmpU(G& a, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
+  for (auto [u, v] : deletions)
     a.removeEdge(u, v);
   updateOmpU(a);
-  for (auto [u, v, w] : insertions)
-    a.addEdge(u, v, w);
+  for (auto [u, v] : insertions)
+    a.addEdge(u, v);
   updateOmpU(a);
 }
 #endif
