@@ -195,7 +195,7 @@ inline PagerankResult<V> pagerankPruneInvoke(const G& x, const H& xt, const Page
       for (l=0; l<L;) {
         if (ASYNC) {
           if (!ASYNCF) fillValueU(vafe, B(0));  // Reset affected vertices for next iteration
-          V el = pagerankPruneUpdateRanksAsync<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
+          V el = pagerankPruneUpdateRanksAsync<ASYNCF>(r, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
           if (el<E) break;   // Check tolerance
         }
@@ -250,7 +250,7 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
       for (l=0; l<L;) {
         if (ASYNC) {
           if (!ASYNCF) fillValueOmpU(vafe, B(0));  // Reset affected vertices for next iteration
-          V el = pagerankPruneUpdateRanksAsyncOmp<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
+          V el = pagerankPruneUpdateRanksAsyncOmp<ASYNCF>(r, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
           if (el<E) break;   // Check tolerance
         }

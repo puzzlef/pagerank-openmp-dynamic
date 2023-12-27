@@ -8,14 +8,15 @@ printf "" > "$out"
 if [[ "$DOWNLOAD" != "0" ]]; then
   rm -rf $src
   git clone https://github.com/puzzlef/$src
+  cd $src
+  git checkout approach-prune
 fi
-cd $src
 
 # Fixed config
 : "${TYPE:=double}"
 : "${MAX_THREADS:=64}"
-: "${REPEAT_BATCH:=5}"
-: "${REPEAT_METHOD:=5}"
+: "${REPEAT_BATCH:=1}"
+: "${REPEAT_METHOD:=1}"
 # Parameter sweep for batch (randomly generated)
 : "${BATCH_UNIT:=%}"
 : "${BATCH_LENGTH:=1}"
