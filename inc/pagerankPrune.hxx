@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include "_main.hxx"
+#include "balance.hxx"
+#include "pagerank.hxx"
 
 using std::tuple;
 using std::vector;
@@ -107,18 +109,22 @@ inline V pagerankPruneUpdateRanksAsync(vector<V>& a, vector<B>& vafe, const G& x
  * @param D frontier tolerance
  * @param C prune tolerance
  */
-template <bool ASYNCF=false, class G, class H, class V, class B>
-inline void pagerankPruneUpdateRanksOmp(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<V>& r, const vector<B>& vaff, V C0, V P, V D, V C) {
-  using  K = typename H::key_type;
+template <bool ASYNCF=false, class G, class K, class H, class V, class B>
+inline void pagerankPruneUpdateRanksOmp(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<K>& part, const vector<V>& r, const vector<B>& vaff, V C0, V P, V D, V C) {
   size_t S = xt.span();
-  #pragma omp parallel for schedule(dynamic, 2048)
-  for (K u=0; u<S; ++u) {
-    if (!xt.hasVertex(u)) continue;
-    if (!vaff[u]) { a[u] = r[u]; continue; }
-    V ev = pagerankPruneUpdateRank(a, xt, r, u, C0, P);
-    if (ev>D) x.forEachEdgeKey(u, [&](auto v) { if (v!=u) vafe[v] = B(1); });
-    if (!ASYNCF && ev>C)  vafe[u] = B(1);
-    if ( ASYNCF && ev<=C) vafe[u] = B(0);
+  size_t I = part.size() - 1;
+  #pragma omp parallel for schedule(dynamic, 1)
+  for (K i=0; i<I; ++i) {
+    K VB = part[i];
+    K VE = part[i+1];
+    for (K u=VB; u<VE; ++u) {
+      if (!xt.hasVertex(u)) continue;
+      if (!vaff[u]) { a[u] = r[u]; continue; }
+      V ev = pagerankPruneUpdateRank(a, xt, r, u, C0, P);
+      if (ev>D) x.forEachEdgeKey(u, [&](auto v) { if (v!=u) vafe[v] = B(1); });
+      if (!ASYNCF && ev>C)  vafe[u] = B(1);
+      if ( ASYNCF && ev<=C) vafe[u] = B(0);
+    }
   }
 }
 
@@ -135,20 +141,24 @@ inline void pagerankPruneUpdateRanksOmp(vector<V>& a, vector<B>& vafe, const G& 
  * @param D frontier tolerance
  * @param C prune tolerance
  */
-template <bool ASYNCF=false, class G, class H, class V, class B>
-inline V pagerankPruneUpdateRanksAsyncOmp(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<B>& vaff, V C0, V P, V D, V C) {
-  using  K = typename H::key_type;
+template <bool ASYNCF=false, class G, class H, class K, class V, class B>
+inline V pagerankPruneUpdateRanksAsyncOmp(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<K>& part, const vector<B>& vaff, V C0, V P, V D, V C) {
   size_t S = xt.span();
+  size_t I = part.size() - 1;
   V el = V();
-  #pragma omp parallel for schedule(dynamic, 2048) reduction(max:el)
-  for (K u=0; u<S; ++u) {
-    if (!xt.hasVertex(u)) continue;
-    if (!vaff[u]) continue;
-    V ev = pagerankPruneUpdateRank(a, xt, a, u, C0, P);
-    if (ev>D) x.forEachEdgeKey(u, [&](auto v) { if (v!=u) vafe[v] = B(1); });
-    if (!ASYNCF && ev>C)  vafe[u] = B(1);
-    if ( ASYNCF && ev<=C) vafe[u] = B(0);
-    el = max(el, ev);
+  #pragma omp parallel for schedule(dynamic, 1) reduction(max:el)
+  for (K i=0; i<I; ++i) {
+    K VB = part[i];
+    K VE = part[i+1];
+    for (K u=VB; u<VE; ++u) {
+      if (!xt.hasVertex(u)) continue;
+      if (!vaff[u]) continue;
+      V ev = pagerankPruneUpdateRank(a, xt, a, u, C0, P);
+      if (ev>D) x.forEachEdgeKey(u, [&](auto v) { if (v!=u) vafe[v] = B(1); });
+      if (!ASYNCF && ev>C)  vafe[u] = B(1);
+      if ( ASYNCF && ev<=C) vafe[u] = B(0);
+      el = max(el, ev);
+    }
   }
   return el;
 }
@@ -195,7 +205,7 @@ inline PagerankResult<V> pagerankPruneInvoke(const G& x, const H& xt, const Page
       for (l=0; l<L;) {
         if (ASYNC) {
           if (!ASYNCF) fillValueU(vafe, B(0));  // Reset affected vertices for next iteration
-          V el = pagerankPruneUpdateRanksAsync<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
+          V el = pagerankPruneUpdateRanksAsync<ASYNCF>(r, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
           if (el<E) break;   // Check tolerance
         }
@@ -234,12 +244,17 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
   V   D  = o.frontierTolerance;
   V   C  = o.pruneTolerance;
   int L  = o.maxIterations, l = 0;
+  int T  = omp_get_max_threads();
+  vector<K> part;
   vector<V> r(S), a;
   vector<B> vaff(S), vafe;
+  part.reserve(S);
   if (!ASYNC)  a.resize(S);
   if (!ASYNCF) vafe.resize(S);
   float ti = 0, tm = 0, tc = 0;
   float t  = measureDuration([&]() {
+    // Edge balance partitioning.
+    ti += measureDuration([&]() { edgeBalanceW(part, xt, 16*T); });
     // Initialize rank of each vertex.
     ti += measureDuration([&]() { fi(a, r); });
     // Mark affected vertices.
@@ -250,13 +265,13 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
       for (l=0; l<L;) {
         if (ASYNC) {
           if (!ASYNCF) fillValueOmpU(vafe, B(0));  // Reset affected vertices for next iteration
-          V el = pagerankPruneUpdateRanksAsyncOmp<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
+          V el = pagerankPruneUpdateRanksAsyncOmp<ASYNCF>(r, ASYNCF? vaff : vafe, x, xt, part, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
           if (el<E) break;   // Check tolerance
         }
         else {
           if (!ASYNCF) fillValueOmpU(vafe, B(0));  // Reset affected vertices for next iteration
-          pagerankPruneUpdateRanksOmp<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, r, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
+          pagerankPruneUpdateRanksOmp<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, part, r, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
           V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
           swap(a, r);        // Final ranks in (r)

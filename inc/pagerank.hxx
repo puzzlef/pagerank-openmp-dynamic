@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include "_main.hxx"
+#include "balance.hxx"
 
 using std::tuple;
 using std::vector;
@@ -196,15 +197,19 @@ inline V pagerankUpdateRanksAsync(vector<V>& a, const H& xt, V C0, V P, FA fa, F
  * @param fa is vertex affected? (v)
  * @param fu called with vertex rank update (v, ev)
  */
-template <class H, class V, class FA, class FR>
-inline void pagerankUpdateRanksOmp(vector<V>& a, const H& xt, const vector<V>& r, V C0, V P, FA fa, FR fu) {
-  using  K = typename H::key_type;
+template <class H, class K, class V, class FA, class FR>
+inline void pagerankUpdateRanksOmp(vector<V>& a, const H& xt, const vector<K>& part, const vector<V>& r, V C0, V P, FA fa, FR fu) {
   size_t S = xt.span();
-  #pragma omp parallel for schedule(dynamic, 2048)
-  for (K v=0; v<S; ++v) {
-    if (!xt.hasVertex(v) || !fa(v)) continue;
-    V ev = pagerankUpdateRank(a, xt, r, v, C0, P);
-    fu(v, ev);
+  size_t I = part.size() - 1;
+  #pragma omp parallel for schedule(dynamic, 1)
+  for (K i=0; i<I; ++i) {
+    K VB = part[i];
+    K VE = part[i+1];
+    for (K v=VB; v<VE; ++v) {
+      if (!xt.hasVertex(v) || !fa(v)) continue;
+      V ev = pagerankUpdateRank(a, xt, r, v, C0, P);
+      fu(v, ev);
+    }
   }
 }
 
@@ -219,16 +224,21 @@ inline void pagerankUpdateRanksOmp(vector<V>& a, const H& xt, const vector<V>& r
  * @param fu called with vertex rank update (v, ev)
  * @returns maximum change between previous and current rank values
  */
-template <class H, class V, class FA, class FR>
-inline V pagerankUpdateRanksAsyncOmp(vector<V>& a, const H& xt, V C0, V P, FA fa, FR fu) {
+template <class H, class K, class V, class FA, class FR>
+inline V pagerankUpdateRanksAsyncOmp(vector<V>& a, const H& xt, const vector<K>& part, V C0, V P, FA fa, FR fu) {
   V el = V();
   size_t S = xt.span();
-  #pragma omp parallel for schedule(dynamic, 2048) reduction(max:el)
-  for (size_t v=0; v<S; ++v) {
-    if (!xt.hasVertex(v) || !fa(v)) continue;
-    V ev = pagerankUpdateRank(a, xt, a, v, C0, P);
-    fu(v, ev);
-    el = max(el, ev);
+  size_t I = part.size() - 1;
+  #pragma omp parallel for schedule(dynamic, 1) reduction(max:el)
+  for (K i=0; i<I; ++i) {
+    K VB = part[i];
+    K VE = part[i+1];
+    for (K v=VB; v<VE; ++v) {
+      if (!xt.hasVertex(v) || !fa(v)) continue;
+      V ev = pagerankUpdateRank(a, xt, a, v, C0, P);
+      fu(v, ev);
+      el = max(el, ev);
+    }
   }
   return el;
 }
@@ -395,10 +405,15 @@ inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>
   V   P  = o.damping;
   V   E  = o.tolerance;
   int L  = o.maxIterations, l = 0;
+  int T  = omp_get_max_threads();
+  vector<K> part;
   vector<V> r(S), a;
+  part.reserve(S);
   if (!ASYNC) a.resize(S);
   float ti = 0, tm = 0, tc = 0;
   float t  = measureDuration([&]() {
+    // Edge balance partitioning.
+    ti += measureDuration([&]() { edgeBalanceW(part, xt, 16*T); });
     // Intitialize rank of each vertex.
     ti += measureDuration([&]() { fi(a, r); });
     // Mark affected vertices.
@@ -409,13 +424,13 @@ inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>
       for (l=0; l<L;) {
         if (ASYNC) {
           fc();  // Clear affected vertices
-          V el = pagerankUpdateRanksAsyncOmp(r, xt, C0, P, fa, fu); ++l;  // Update ranks of vertices
+          V el = pagerankUpdateRanksAsyncOmp(r, xt, part, C0, P, fa, fu); ++l;  // Update ranks of vertices
           fs();  // Swap current and previous affected vertices
           if (el<E) break;  // Check tolerance
         }
         else {
           fc();  // Clear affected vertices
-          pagerankUpdateRanksOmp(a, xt, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
+          pagerankUpdateRanksOmp(a, xt, part, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
           V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
           swap(a, r);       // Final ranks in (r)
           fs();  // Swap current and previous affected vertices
