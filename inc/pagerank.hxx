@@ -162,6 +162,29 @@ inline void pagerankUpdateRanks(vector<V>& a, const H& xt, const vector<V>& r, V
 }
 
 
+/**
+ * Update ranks for vertices in a graph.
+ * @param a current rank of each vertex (updated)
+ * @param xt transpose of original graph
+ * @param C0 common teleport rank contribution to each vertex
+ * @param P damping factor [0.85]
+ * @param fa is vertex affected? (v)
+ * @param fu called with vertex rank update (v, ev)
+ * @returns maximum change between previous and current rank values
+ */
+template <class H, class V, class FA, class FR>
+inline V pagerankUpdateRanksAsync(vector<V>& a, const H& xt, V C0, V P, FA fa, FR fu) {
+  V el = V();
+  xt.forEachVertexKey([&](auto v) {
+    if (!fa(v)) return;
+    V ev = pagerankUpdateRank(a, xt, a, v, C0, P);
+    fu(v, ev);
+    el = max(el, ev);
+  });
+  return el;
+}
+
+
 #ifdef OPENMP
 /**
  * Update ranks for vertices in a graph (using OpenMP).
@@ -183,6 +206,31 @@ inline void pagerankUpdateRanksOmp(vector<V>& a, const H& xt, const vector<V>& r
     V ev = pagerankUpdateRank(a, xt, r, v, C0, P);
     fu(v, ev);
   }
+}
+
+
+/**
+ * Update ranks for vertices in a graph (using OpenMP).
+ * @param a current rank of each vertex (updated)
+ * @param xt transpose of original graph
+ * @param C0 common teleport rank contribution to each vertex
+ * @param P damping factor [0.85]
+ * @param fa is vertex affected? (v)
+ * @param fu called with vertex rank update (v, ev)
+ * @returns maximum change between previous and current rank values
+ */
+template <class H, class V, class FA, class FR>
+inline V pagerankUpdateRanksAsyncOmp(vector<V>& a, const H& xt, V C0, V P, FA fa, FR fu) {
+  V el = V();
+  size_t S = xt.span();
+  #pragma omp parallel for schedule(dynamic, 2048) reduction(max:el)
+  for (size_t v=0; v<S; ++v) {
+    if (!xt.hasVertex(v) || !fa(v)) continue;
+    V ev = pagerankUpdateRank(a, xt, a, v, C0, P);
+    fu(v, ev);
+    el = max(el, ev);
+  }
+  return el;
 }
 #endif
 #pragma endregion
@@ -281,17 +329,20 @@ inline void pagerankInitializeRanksFromOmp(vector<V>& a, vector<V>& r, const H& 
  * @param fm marking affected vertices ()
  * @param fa is vertex affected? (v)
  * @param fu called with vertex rank changes (v, ev)
+ * @param fc clear affected vertices ()
+ * @param fs swap current and previous affected vertices ()
  * @returns pagerank result
  */
-template <class H, class V, class FI, class FM, class FA, class FU>
-inline PagerankResult<V> pagerankInvoke(const H& xt, const PagerankOptions<V>& o, FI fi, FM fm, FA fa, FU fu) {
+template <bool ASYNC=false, class H, class V, class FI, class FM, class FA, class FU, class FC, class FS>
+inline PagerankResult<V> pagerankInvoke(const H& xt, const PagerankOptions<V>& o, FI fi, FM fm, FA fa, FU fu, FC fc, FS fs) {
   using  K = typename H::key_type;
   size_t S = xt.span();
   size_t N = xt.order();
   V   P  = o.damping;
   V   E  = o.tolerance;
   int L  = o.maxIterations, l = 0;
-  vector<V> a(S), r(S);
+  vector<V> r(S), a;
+  if (!ASYNC) a.resize(S);
   float ti = 0, tm = 0, tc = 0;
   float t  = measureDuration([&]() {
     // Intitialize rank of each vertex.
@@ -302,10 +353,20 @@ inline PagerankResult<V> pagerankInvoke(const H& xt, const PagerankOptions<V>& o
     tc += measureDuration([&]() {
       const V C0 = (1-P)/N;
       for (l=0; l<L;) {
-        pagerankUpdateRanks(a, xt, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
-        V el = liNormDelta(a, r);  // Compare previous and current ranks
-        swap(a, r);       // Final ranks in (r)
-        if (el<E) break;  // Check tolerance
+        if (ASYNC) {
+          fc();  // Clear affected vertices
+          V el = pagerankUpdateRanksAsync(r, xt, C0, P, fa, fu); ++l;  // Update ranks of vertices
+          fs();  // Swap current and previous affected vertices
+          if (el<E) break;  // Check tolerance
+        }
+        else {
+          fc();  // Clear affected vertices
+          pagerankUpdateRanks(a, xt, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
+          V el = liNormDelta(a, r);  // Compare previous and current ranks
+          swap(a, r);       // Final ranks in (r)
+          fs();  // Swap current and previous affected vertices
+          if (el<E) break;  // Check tolerance
+        }
       }
     });
   }, o.repeat);
@@ -322,17 +383,20 @@ inline PagerankResult<V> pagerankInvoke(const H& xt, const PagerankOptions<V>& o
  * @param fm marking affected vertices ()
  * @param fa is vertex affected? (v)
  * @param fu called with vertex rank changes (v, ev)
+ * @param fc clear affected vertices ()
+ * @param fs swap current and previous affected vertices ()
  * @returns pagerank result
  */
-template <class H, class V, class FI, class FM, class FA, class FU>
-inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>& o, FI fi, FM fm, FA fa, FU fu) {
+template <bool ASYNC=false, class H, class V, class FI, class FM, class FA, class FU, class FC, class FS>
+inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>& o, FI fi, FM fm, FA fa, FU fu, FC fc, FS fs) {
   using  K = typename H::key_type;
   size_t S = xt.span();
   size_t N = xt.order();
   V   P  = o.damping;
   V   E  = o.tolerance;
   int L  = o.maxIterations, l = 0;
-  vector<V> a(S), r(S);
+  vector<V> r(S), a;
+  if (!ASYNC) a.resize(S);
   float ti = 0, tm = 0, tc = 0;
   float t  = measureDuration([&]() {
     // Intitialize rank of each vertex.
@@ -343,10 +407,20 @@ inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>
     tc += measureDuration([&]() {
       const V C0 = (1-P)/N;
       for (l=0; l<L;) {
-        pagerankUpdateRanksOmp(a, xt, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
-        V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
-        swap(a, r);       // Final ranks in (r)
-        if (el<E) break;  // Check tolerance
+        if (ASYNC) {
+          fc();  // Clear affected vertices
+          V el = pagerankUpdateRanksAsyncOmp(r, xt, C0, P, fa, fu); ++l;  // Update ranks of vertices
+          fs();  // Swap current and previous affected vertices
+          if (el<E) break;  // Check tolerance
+        }
+        else {
+          fc();  // Clear affected vertices
+          pagerankUpdateRanksOmp(a, xt, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
+          V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
+          swap(a, r);       // Final ranks in (r)
+          fs();  // Swap current and previous affected vertices
+          if (el<E) break;  // Check tolerance
+        }
       }
     });
   }, o.repeat);
@@ -365,14 +439,14 @@ inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>
  * @param o pagerank options
  * @returns pagerank result
  */
-template <class H, class V>
+template <bool ASYNC=false, class H, class V>
 inline PagerankResult<V> pagerankStatic(const H& xt, const PagerankOptions<V>& o) {
   if (xt.empty()) return {};
-  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanks(a, r, xt); };
+  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanks<ASYNC>(a, r, xt); };
   auto fm = [&]() { };
   auto fa = [ ](auto u) { return true; };
   auto fu = [ ](auto u, auto eu) { };
-  return pagerankInvoke(xt, o, fi, fm, fa, fu);
+  return pagerankInvoke<ASYNC>(xt, o, fi, fm, fa, fu, fm, fm);
 }
 
 
@@ -383,14 +457,14 @@ inline PagerankResult<V> pagerankStatic(const H& xt, const PagerankOptions<V>& o
  * @param o pagerank options
  * @returns pagerank result
  */
-template <class H, class V>
+template <bool ASYNC=false, class H, class V>
 inline PagerankResult<V> pagerankStaticOmp(const H& xt, const PagerankOptions<V>& o) {
   if (xt.empty()) return {};
-  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksOmp(a, r, xt); };
+  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksOmp<ASYNC>(a, r, xt); };
   auto fm = [&]() { };
   auto fa = [ ](auto u) { return true; };
   auto fu = [ ](auto u, auto eu) { };
-  return pagerankInvokeOmp(xt, o, fi, fm, fa, fu);
+  return pagerankInvokeOmp<ASYNC>(xt, o, fi, fm, fa, fu, fm, fm);
 }
 #endif
 #pragma endregion
@@ -406,14 +480,14 @@ inline PagerankResult<V> pagerankStaticOmp(const H& xt, const PagerankOptions<V>
  * @param o pagerank options
  * @returns pagerank result
  */
-template <class H, class V>
+template <bool ASYNC=false, class H, class V>
 inline PagerankResult<V> pagerankNaiveDynamic(const H& xt, const vector<V> *q, const PagerankOptions<V>& o) {
   if (xt.empty()) return {};
-  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFrom(a, r, xt, *q); };
+  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFrom<ASYNC>(a, r, xt, *q); };
   auto fm = [&]() { };
   auto fa = [ ](auto u) { return true; };
   auto fu = [ ](auto u, auto eu) { };
-  return pagerankInvoke(xt, o, fi, fm, fa, fu);
+  return pagerankInvoke<ASYNC>(xt, o, fi, fm, fa, fu, fm, fm);
 }
 
 
@@ -425,14 +499,14 @@ inline PagerankResult<V> pagerankNaiveDynamic(const H& xt, const vector<V> *q, c
  * @param o pagerank options
  * @returns pagerank result
  */
-template <class H, class V>
+template <bool ASYNC=false, class H, class V>
 inline PagerankResult<V> pagerankNaiveDynamicOmp(const H& xt, const vector<V> *q, const PagerankOptions<V>& o) {
   if (xt.empty()) return {};
-  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFromOmp(a, r, xt, *q); };
+  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFromOmp<ASYNC>(a, r, xt, *q); };
   auto fm = [&]() { };
   auto fa = [ ](auto u) { return true; };
   auto fu = [ ](auto u, auto eu) { };
-  return pagerankInvokeOmp(xt, o, fi, fm, fa, fu);
+  return pagerankInvokeOmp<ASYNC>(xt, o, fi, fm, fa, fu, fm, fm);
 }
 #endif
 #pragma endregion
@@ -497,16 +571,19 @@ inline void pagerankAffectedFrontierOmpW(vector<B>& vis, const G& x, const G& y,
  * @param o pagerank options
  * @returns pagerank result
  */
-template <class FLAG=char, class G, class H, class K, class V>
+template <bool ASYNC=false, bool ASYNCF=false, class FLAG=char, class G, class H, class K, class V>
 inline PagerankResult<V> pagerankDynamicFrontier(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o) {
   V D = o.frontierTolerance;  // Frontier tolerance = Tolerance/1000
   if (xt.empty()) return {};
-  vector<FLAG> vaff(max(x.span(), y.span()));
-  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFrom(a, r, xt, *q); };
+  vector<FLAG> vaff(max(x.span(), y.span())), vafe;
+  if (!ASYNCF) vafe.resize(vaff.size());
+  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFrom<ASYNC>(a, r, xt, *q); };
   auto fm = [&]() { pagerankAffectedFrontierW(vaff, x, y, deletions, insertions); };
   auto fa = [&](auto u) { return vaff[u]==FLAG(1); };
   auto fu = [&](auto u, auto eu) { if (eu>D) y.forEachEdgeKey(u, [&](auto v) { vaff[v] = FLAG(1); }); };
-  return pagerankInvoke(yt, o, fi, fm, fa, fu);
+  auto fc = [&]() { if (!ASYNCF) fillValueU(vafe, FLAG(0)); };
+  auto fs = [&]() { if (!ASYNCF) swap(vaff, vafe); };
+  return pagerankInvoke<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
 }
 
 
@@ -523,16 +600,19 @@ inline PagerankResult<V> pagerankDynamicFrontier(const G& x, const H& xt, const 
  * @param o pagerank options
  * @returns pagerank result
  */
-template <class FLAG=char, class G, class H, class K, class V>
+template <bool ASYNC=false, bool ASYNCF=false, class FLAG=char, class G, class H, class K, class V>
 inline PagerankResult<V> pagerankDynamicFrontierOmp(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o) {
   V D = o.frontierTolerance;  // Frontier tolerance = Tolerance/1000
   if (xt.empty()) return {};
-  vector<FLAG> vaff(max(x.span(), y.span()));
-  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFromOmp(a, r, xt, *q); };
+  vector<FLAG> vaff(max(x.span(), y.span())), vafe;
+  if (!ASYNCF) vafe.resize(vaff.size());
+  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFromOmp<ASYNC>(a, r, xt, *q); };
   auto fm = [&]() { pagerankAffectedFrontierOmpW(vaff, x, y, deletions, insertions); };
   auto fa = [&](auto u) { return vaff[u]==FLAG(1); };
   auto fu = [&](auto u, auto eu) { if (eu>D) y.forEachEdgeKey(u, [&](auto v) { vaff[v] = FLAG(1); }); };
-  return pagerankInvokeOmp(yt, o, fi, fm, fa, fu);
+  auto fc = [&]() { if (!ASYNCF) fillValueU(vafe, FLAG(0)); };
+  auto fs = [&]() { if (!ASYNCF) swap(vaff, vafe); };
+  return pagerankInvokeOmp<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
 }
 #endif
 #pragma endregion
