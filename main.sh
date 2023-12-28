@@ -9,27 +9,26 @@ if [[ "$DOWNLOAD" != "0" ]]; then
   rm -rf $src
   git clone https://github.com/puzzlef/$src
   cd $src
-  git checkout approach-prune
 fi
 
 # Fixed config
 : "${TYPE:=double}"
 : "${MAX_THREADS:=64}"
-: "${REPEAT_BATCH:=1}"
+: "${REPEAT_BATCH:=5}"
 : "${REPEAT_METHOD:=1}"
 # Parameter sweep for batch (randomly generated)
 : "${BATCH_UNIT:=%}"
 : "${BATCH_LENGTH:=1}"
-: "${BATCH_DELETIONS_BEGIN:=0.000000005}"
+: "${BATCH_DELETIONS_BEGIN:=0.00000005}"
 : "${BATCH_DELETIONS_END:=0.05}"
 : "${BATCH_DELETIONS_STEP:=*=10}"
-: "${BATCH_INSERTIONS_BEGIN:=0.000000005}"
+: "${BATCH_INSERTIONS_BEGIN:=0.00000005}"
 : "${BATCH_INSERTIONS_END:=0.05}"
 : "${BATCH_INSERTIONS_STEP:=*=10}"
 # Parameter sweep for number of threads
 : "${NUM_THREADS_MODE:=all}"
-: "${NUM_THREADS_BEGIN:=32}"
-: "${NUM_THREADS_END:=32}"
+: "${NUM_THREADS_BEGIN:=64}"
+: "${NUM_THREADS_END:=64}"
 : "${NUM_THREADS_STEP:=*=2}"
 # Define macros (dont forget to add here)
 DEFINES=(""
@@ -65,8 +64,8 @@ stdbuf --output=L ./"a$1.out" ~/Data/com-LiveJournal.mtx 2>&1 | tee -a "$out"
 stdbuf --output=L ./"a$1.out" ~/Data/com-Orkut.mtx       2>&1 | tee -a "$out"
 stdbuf --output=L ./"a$1.out" ~/Data/asia_osm.mtx        2>&1 | tee -a "$out"
 stdbuf --output=L ./"a$1.out" ~/Data/europe_osm.mtx      2>&1 | tee -a "$out"
-stdbuf --output=L ./"a$1.out" ~/Data/kmer_A2a.mtx        2>&1 | tee -a "$out"
-stdbuf --output=L ./"a$1.out" ~/Data/kmer_V1r.mtx        2>&1 | tee -a "$out"
+stdbuf --output=L ./"a$1.out" ~/Data/kmer_A2a.mtx        2>&1 | tee -a "$out"x
+stdbuf --output=L ./"a$1.out" ~/Data/kmer_V1r.mtx        2>&1 | tee -a "$out"x
 
 # Signal completion
 curl -X POST "https://maker.ifttt.com/trigger/puzzlef/with/key/${IFTTT_KEY}?value1=$src$1"
