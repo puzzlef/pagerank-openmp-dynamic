@@ -155,7 +155,7 @@ inline V pagerankUpdateRank(vector<V>& a, const H& xt, const vector<V>& r, K v, 
 template <class H, class V, class FA, class FR>
 inline void pagerankUpdateRanks(vector<V>& a, const H& xt, const vector<V>& r, V C0, V P, FA fa, FR fu) {
   xt.forEachVertexKey([&](auto v) {
-    if (!fa(v)) return;
+    if (!fa(v)) { a[v] = r[v]; return; }
     V ev = pagerankUpdateRank(a, xt, r, v, C0, P);
     fu(v, ev);
   });
@@ -202,7 +202,8 @@ inline void pagerankUpdateRanksOmp(vector<V>& a, const H& xt, const vector<V>& r
   size_t S = xt.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K v=0; v<S; ++v) {
-    if (!xt.hasVertex(v) || !fa(v)) continue;
+    if (!xt.hasVertex(v)) continue;
+    if (!fa(v)) { a[v] = r[v]; continue; }
     V ev = pagerankUpdateRank(a, xt, r, v, C0, P);
     fu(v, ev);
   }
