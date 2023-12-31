@@ -145,26 +145,15 @@ void runExperiment(const G& x, const H& xt) {
       V frontierTolerance = 1e-15;
       V pruneTolerance = 1e-15;
       auto s0 = pagerankStaticOmp(yt, PagerankOptions<V>(1, 1e-100));
-      // Find multi-threaded OpenMP-based Static PageRank.
-      auto a0 = pagerankStaticOmp<false>(yt, PagerankOptions<V>(repeat, tolerance, frontierTolerance));
-      flog(a0, s0, "pagerankStaticOmp", frontierTolerance, 0.0);
-      auto b0 = pagerankPruneStaticOmp<false, true>(y, yt, PagerankOptions<V>(repeat, tolerance, frontierTolerance, pruneTolerance));
-      flog(b0, s0, "pagerankPruneStaticOmp", frontierTolerance, pruneTolerance);
-      // Find multi-threaded OpenMP-based Naive-dynamic PageRank.
-      auto a1 = pagerankNaiveDynamicOmp<true>(yt, &r0.ranks, {repeat, tolerance, frontierTolerance});
-      flog(a1, s0, "pagerankNaiveDynamicOmp", frontierTolerance, 0.0);
-      auto b1 = pagerankPruneNaiveDynamicOmp<true, true>(y, yt, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
-      flog(b1, s0, "pagerankPruneNaiveDynamicOmp", frontierTolerance, pruneTolerance);
       // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank.
-      auto a2 = pagerankDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance});
-      flog(a2, s0, "pagerankDynamicFrontierOmp", frontierTolerance, 0.0);
-      auto b2 = pagerankPruneDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
-      flog(b2, s0, "pagerankPruneDynamicFrontierOmp", frontierTolerance, pruneTolerance);
-      // Find multi-threaded OpenMP-based Traversal-based Dynamic PageRank.
-      auto a3 = pagerankDynamicTraversalOmp<true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance});
-      flog(a3, s0, "pagerankDynamicTraversalOmp", frontierTolerance, 0.0);
-      auto b3 = pagerankPruneDynamicTraversalOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
-      flog(b3, s0, "pagerankPruneDynamicTraversalOmp", frontierTolerance, pruneTolerance);
+      auto b1 = pagerankDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
+      flog(b1, s0, "pagerankDynamicFrontierOmp", frontierTolerance, 0.0);
+      for (V pruneTolerance=1e-15; pruneTolerance>=1e-35; pruneTolerance/=100) {
+        auto b2 = pagerankPruneDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
+        flog(b2, s0, "pagerankPruneDynamicFrontierOmp", frontierTolerance, pruneTolerance);
+      }
+      auto b3 = pagerankPruneDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, 0.0});
+      flog(b3, s0, "pagerankPruneDynamicFrontierOmp", frontierTolerance, 0.0);
     });
   });
 }
