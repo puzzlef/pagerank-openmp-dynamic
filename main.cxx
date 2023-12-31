@@ -160,6 +160,11 @@ void runExperiment(const G& x, const H& xt) {
       flog(a2, s0, "pagerankDynamicFrontierOmp", frontierTolerance, 0.0);
       auto b2 = pagerankPruneDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
       flog(b2, s0, "pagerankPruneDynamicFrontierOmp", frontierTolerance, pruneTolerance);
+      // Find multi-threaded OpenMP-based Traversal-based Dynamic PageRank.
+      auto a3 = pagerankDynamicTraversalOmp<true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance});
+      flog(a3, s0, "pagerankDynamicTraversalOmp", frontierTolerance, 0.0);
+      auto b3 = pagerankPruneDynamicTraversalOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
+      flog(b3, s0, "pagerankPruneDynamicTraversalOmp", frontierTolerance, pruneTolerance);
     });
   });
 }
