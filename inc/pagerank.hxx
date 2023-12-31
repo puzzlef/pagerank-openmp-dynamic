@@ -28,9 +28,9 @@ struct PagerankOptions {
   int repeat;
   /** Tolerance for convergence [10^-10]. */
   V   tolerance;
-  /** Tolerance for marking neighbors of a vertex as affected [10^-13]. */
+  /** Tolerance for marking neighbors of a vertex as affected [10^-15]. */
   V   frontierTolerance;
-  /** Tolerance for pruning an affected vertex [10^-13]. */
+  /** Tolerance for pruning an affected vertex [10^-15]. */
   V   pruneTolerance;
   /** Damping factor [0.85]. */
   V   damping;
@@ -44,12 +44,12 @@ struct PagerankOptions {
    * Define a set of PageRank options.
    * @param repeat number of times to repeat the algorithm [1]
    * @param tolerance tolerance for convergence [10^-10]
-   * @param frontierTolerance tolerance for marking neighbors of a vertex as affected [10^-13]
-   * @param pruneTolerance tolerance for pruning an affected vertex [10^-13]
+   * @param frontierTolerance tolerance for marking neighbors of a vertex as affected [10^-15]
+   * @param pruneTolerance tolerance for pruning an affected vertex [10^-15]
    * @param damping damping factor [0.85]
    * @param maxIterations maximum number of iterations [500]
    */
-  PagerankOptions(int repeat=1, V tolerance=1e-10, V frontierTolerance=1e-13, V pruneTolerance=1e-13, V damping=0.85, int maxIterations=500) :
+  PagerankOptions(int repeat=1, V tolerance=1e-10, V frontierTolerance=1e-15, V pruneTolerance=1e-15, V damping=0.85, int maxIterations=500) :
   repeat(repeat), tolerance(tolerance), frontierTolerance(frontierTolerance), pruneTolerance(pruneTolerance), damping(damping), maxIterations(maxIterations) {}
   #pragma endregion
 };
@@ -508,6 +508,112 @@ inline PagerankResult<V> pagerankNaiveDynamicOmp(const H& xt, const vector<V> *q
   auto fa = [ ](auto u) { return true; };
   auto fu = [ ](auto u, auto eu) { };
   return pagerankInvokeOmp<ASYNC>(xt, o, fi, fm, fa, fu, fm, fm);
+}
+#endif
+#pragma endregion
+
+
+
+
+#pragma region DYNAMIC TRAVERSAL
+/**
+ * Find affected vertices due to a batch update with Dynamic Traversal approach.
+ * @param vis affected flags (output)
+ * @param x original graph
+ * @param y updated graph
+ * @param deletions edge deletions in batch update
+ * @param insertions edge insertions in batch update
+ */
+template <class B, class G, class K>
+inline void pagerankAffectedTraversalW(vector<B>& vis, const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
+  auto ft = [](auto u, auto d) { return true; };
+  auto fp = [](auto u, auto d) { };
+  for (const auto& [u, v] : deletions)
+    x.forEachEdgeKey(u, [&](auto v) { bfsVisitedForEachU(vis, y, v, ft, fp); });
+  for (const auto& [u, v] : insertions)
+    y.forEachEdgeKey(u, [&](auto v) { bfsVisitedForEachU(vis, y, v, ft, fp); });
+}
+
+
+#ifdef OPENMP
+/**
+ * Find affected vertices due to a batch update with Dynamic Traversal approach (using OpenMP).
+ * @param vis affected flags (output)
+ * @param x original graph
+ * @param y updated graph
+ * @param deletions edge deletions in batch update
+ * @param insertions edge insertions in batch update
+ */
+template <class B, class G, class K>
+inline void pagerankAffectedTraversalOmpW(vector<B>& vis, const G& x, const G& y, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions) {
+  auto  ft = [](auto u, auto d) { return true; };
+  auto  fp = [](auto u, auto d) { };
+  size_t D = deletions.size();
+  size_t I = insertions.size();
+  #pragma omp parallel for schedule(auto)
+  for (size_t i=0; i<D; ++i) {
+    K u = get<0>(deletions[i]);
+    x.forEachEdgeKey(u, [&](auto v) { bfsVisitedForEachU(vis, y, v, ft, fp); });
+  }
+  #pragma omp parallel for schedule(auto)
+  for (size_t i=0; i<I; ++i) {
+    K u = get<0>(insertions[i]);
+    y.forEachEdgeKey(u, [&](auto v) { bfsVisitedForEachU(vis, y, v, ft, fp); });
+  }
+}
+#endif
+
+
+/**
+ * Find the rank of each vertex in a dynamic graph with Dynamic Traversal approach.
+ * @param x original graph
+ * @param xt transpose of original graph
+ * @param y updated graph
+ * @param yt transpose of updated graph
+ * @param deletions edge deletions in batch update
+ * @param insertions edge insertions in batch update
+ * @param q initial ranks
+ * @param o pagerank options
+ * @returns pagerank result
+ */
+template <bool ASYNC=false, class FLAG=char, class G, class H, class K, class V>
+inline PagerankResult<V> pagerankDynamicTraversal(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o) {
+  if (xt.empty()) return {};
+  vector<FLAG> vaff(max(x.span(), y.span()));
+  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFrom<ASYNC>(a, r, xt, *q); };
+  auto fm = [&]() { pagerankAffectedTraversalW(vaff, x, y, deletions, insertions); };
+  auto fa = [&](auto u) { return vaff[u]==FLAG(1); };
+  auto fu = [&](auto u, auto eu) { };
+  auto fc = [&]() { };
+  auto fs = [&]() { };
+  return pagerankInvoke<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
+}
+
+
+#ifdef OPENMP
+/**
+ * Find the rank of each vertex in a dynamic graph with Dynamic Traversal approach (using OpenMP).
+ * @param x original graph
+ * @param xt transpose of original graph
+ * @param y updated graph
+ * @param yt transpose of updated graph
+ * @param deletions edge deletions in batch update
+ * @param insertions edge insertions in batch update
+ * @param q initial ranks
+ * @param o pagerank options
+ * @returns pagerank result
+ */
+template <bool ASYNC=false, class FLAG=char, class G, class H, class K, class V>
+inline PagerankResult<V> pagerankDynamicTraversalOmp(const G& x, const H& xt, const G& y, const H& yt, const vector<tuple<K, K>>& deletions, const vector<tuple<K, K>>& insertions, const vector<V> *q, const PagerankOptions<V>& o) {
+  if (xt.empty()) return {};
+  vector<FLAG> vaff(max(x.span(), y.span()));
+  auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFromOmp<ASYNC>(a, r, xt, *q); };
+  auto fm = [&]() { pagerankAffectedTraversalOmpW(vaff, x, y, deletions, insertions); };
+  auto fa = [&](auto u) { return vaff[u]==FLAG(1); };
+  auto fu = [&](auto u, auto eu) { };
+  auto fc = [&]() { };
+  auto fs = [&]() { };
+  return pagerankInvokeOmp<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
 }
 #endif
 #pragma endregion

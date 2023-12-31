@@ -162,6 +162,11 @@ void runExperiment(const G& x, const H& xt) {
       flog(c2, s0, "pagerankDynamicFrontierOmpAsyncSyncf");
       auto d2 = pagerankDynamicFrontierOmp<true, true> (x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat});
       flog(d2, s0, "pagerankDynamicFrontierOmpAsyncAsyncf");
+      // Find multi-threaded OpenMP-based Traversal-based Dynamic PageRank.
+      auto a3 = pagerankDynamicTraversalOmp<false>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat});
+      flog(a3, s0, "pagerankDynamicTraversalOmpSync");
+      auto b3 = pagerankDynamicTraversalOmp<true> (x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat});
+      flog(b3, s0, "pagerankDynamicTraversalOmpAsync");
     });
   });
 }
