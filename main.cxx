@@ -128,9 +128,9 @@ void runExperiment(const G& x, const H& xt) {
   auto glog  = [&](const auto& ans, const auto& ref, const char *technique, int numThreads, double deletionsf, double insertionsf, V frontierTolerance, V pruneTolerance) {
     auto err = l1NormDeltaOmp(ans.ranks, ref.ranks);
     printf(
-      "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %09.1fms init, %09.1fms mark, %09.1fms comp, %03d iter, %.2e err} %s\n",
+      "{-%.3e/+%.3e batchf, %03d threads} -> {%09.1fms, %09.1fms init, %09.1fms mark, %09.1fms comp, %03d iter, %.2e err, %.3e aff} %s\n",
       deletionsf, insertionsf, numThreads,
-      ans.time, ans.initializationTime, ans.markingTime, ans.computationTime, ans.iterations, err, technique
+      ans.time, ans.initializationTime, ans.markingTime, ans.computationTime, ans.iterations, err, double(ans.affectedVertices), technique
     );
   };
   // Get ranks of vertices on original graph (static).
@@ -143,28 +143,12 @@ void runExperiment(const G& x, const H& xt) {
       };
       V tolerance = 1e-10;
       V frontierTolerance = 1e-15;
-      V pruneTolerance = 1e-15;
-      auto s0 = pagerankStaticOmp(yt, PagerankOptions<V>(1, 1e-100));
-      // Find multi-threaded OpenMP-based Static PageRank.
-      auto a0 = pagerankStaticOmp<false>(yt, PagerankOptions<V>(repeat, tolerance, frontierTolerance));
-      flog(a0, s0, "pagerankStaticOmp", frontierTolerance, 0.0);
-      auto b0 = pagerankPruneStaticOmp<false, true>(y, yt, PagerankOptions<V>(repeat, tolerance, frontierTolerance, pruneTolerance));
-      flog(b0, s0, "pagerankPruneStaticOmp", frontierTolerance, pruneTolerance);
-      // Find multi-threaded OpenMP-based Naive-dynamic PageRank.
-      auto a1 = pagerankNaiveDynamicOmp<true>(yt, &r0.ranks, {repeat, tolerance, frontierTolerance});
-      flog(a1, s0, "pagerankNaiveDynamicOmp", frontierTolerance, 0.0);
-      auto b1 = pagerankPruneNaiveDynamicOmp<true, true>(y, yt, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
-      flog(b1, s0, "pagerankPruneNaiveDynamicOmp", frontierTolerance, pruneTolerance);
       // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank.
       auto a2 = pagerankDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance});
-      flog(a2, s0, "pagerankDynamicFrontierOmp", frontierTolerance, 0.0);
-      auto b2 = pagerankPruneDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
-      flog(b2, s0, "pagerankPruneDynamicFrontierOmp", frontierTolerance, pruneTolerance);
+      flog(a2, a2, "pagerankDynamicFrontierOmp", frontierTolerance, 0.0);
       // Find multi-threaded OpenMP-based Traversal-based Dynamic PageRank.
       auto a3 = pagerankDynamicTraversalOmp<true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance});
-      flog(a3, s0, "pagerankDynamicTraversalOmp", frontierTolerance, 0.0);
-      auto b3 = pagerankPruneDynamicTraversalOmp<true, true>(x, xt, y, yt, deletions, insertions, &r0.ranks, {repeat, tolerance, frontierTolerance, pruneTolerance});
-      flog(b3, s0, "pagerankPruneDynamicTraversalOmp", frontierTolerance, pruneTolerance);
+      flog(a3, a3, "pagerankDynamicTraversalOmp", frontierTolerance, 0.0);
     });
   });
 }

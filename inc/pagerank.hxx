@@ -76,6 +76,8 @@ struct PagerankResult {
   float markingTime;
   /** Average time taken to compute ranks. */
   float computationTime;
+  /** Number of vertices affected. */
+  size_t affectedVertices;
   #pragma endregion
 
 
@@ -84,7 +86,7 @@ struct PagerankResult {
    * Define empty PageRank result.
    */
   PagerankResult() :
-  ranks(), iterations(0), time(0), initializationTime(0), markingTime(0), computationTime(0) {}
+  ranks(), iterations(0), time(0), initializationTime(0), markingTime(0), computationTime(0), affectedVertices(0) {}
 
   /**
    * Define a PageRank result.
@@ -94,9 +96,10 @@ struct PagerankResult {
    * @param initializationTime average time taken to initialize ranks
    * @param markingTime average time taken to mark affected vertices
    * @param computationTime average time taken to compute ranks
+   * @param affectedVertices number of vertices affected
    */
-  PagerankResult(vector<V>&& ranks, int iterations=0, float time=0, float initializationTime=0, float markingTime=0, float computationTime=0) :
-  ranks(ranks), iterations(iterations), time(time), initializationTime(initializationTime), markingTime(markingTime), computationTime(computationTime) {}
+  PagerankResult(vector<V>&& ranks, int iterations=0, float time=0, float initializationTime=0, float markingTime=0, float computationTime=0, size_t affectedVertices=0) :
+  ranks(ranks), iterations(iterations), time(time), initializationTime(initializationTime), markingTime(markingTime), computationTime(computationTime), affectedVertices(affectedVertices) {}
 
   /**
    * Define a PageRank result.
@@ -106,9 +109,10 @@ struct PagerankResult {
    * @param initializationTime average time taken to initialize ranks
    * @param markingTime average time taken to mark affected vertices
    * @param computationTime average time taken to compute ranks
+   * @param affectedVertices number of vertices affected
    */
-  PagerankResult(vector<V>& ranks, int iterations=0, float time=0, float initializationTime=0, float markingTime=0, float computationTime=0) :
-  ranks(move(ranks)), iterations(iterations), time(time), initializationTime(initializationTime), markingTime(markingTime), computationTime(computationTime) {}
+  PagerankResult(vector<V>& ranks, int iterations=0, float time=0, float initializationTime=0, float markingTime=0, float computationTime=0, size_t affectedVertices=0) :
+  ranks(move(ranks)), iterations(iterations), time(time), initializationTime(initializationTime), markingTime(markingTime), computationTime(computationTime), affectedVertices(affectedVertices) {}
   #pragma endregion
 };
 #pragma endregion
@@ -197,12 +201,13 @@ inline V pagerankUpdateRanksAsync(vector<V>& a, const H& xt, V C0, V P, FA fa, F
  * @param fu called with vertex rank update (v, ev)
  */
 template <class H, class V, class FA, class FR>
-inline void pagerankUpdateRanksOmp(vector<V>& a, const H& xt, const vector<V>& r, V C0, V P, FA fa, FR fu) {
+inline void pagerankUpdateRanksOmp(vector<V>& a, vector<char>& vafc, const H& xt, const vector<V>& r, V C0, V P, FA fa, FR fu) {
   using  K = typename H::key_type;
   size_t S = xt.span();
   #pragma omp parallel for schedule(dynamic, 2048)
   for (K v=0; v<S; ++v) {
     if (!xt.hasVertex(v) || !fa(v)) continue;
+    vafc[v] = char(1);
     V ev = pagerankUpdateRank(a, xt, r, v, C0, P);
     fu(v, ev);
   }
@@ -220,12 +225,13 @@ inline void pagerankUpdateRanksOmp(vector<V>& a, const H& xt, const vector<V>& r
  * @returns maximum change between previous and current rank values
  */
 template <class H, class V, class FA, class FR>
-inline V pagerankUpdateRanksAsyncOmp(vector<V>& a, const H& xt, V C0, V P, FA fa, FR fu) {
+inline V pagerankUpdateRanksAsyncOmp(vector<V>& a, vector<char>& vafc, const H& xt, V C0, V P, FA fa, FR fu) {
   V el = V();
   size_t S = xt.span();
   #pragma omp parallel for schedule(dynamic, 2048) reduction(max:el)
   for (size_t v=0; v<S; ++v) {
     if (!xt.hasVertex(v) || !fa(v)) continue;
+    vafc[v] = char(1);
     V ev = pagerankUpdateRank(a, xt, a, v, C0, P);
     fu(v, ev);
     el = max(el, ev);
@@ -396,6 +402,7 @@ inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>
   V   E  = o.tolerance;
   int L  = o.maxIterations, l = 0;
   vector<V> r(S), a;
+  vector<char> vafc(S);  // Count affected/touched vertices
   if (!ASYNC) a.resize(S);
   float ti = 0, tm = 0, tc = 0;
   float t  = measureDuration([&]() {
@@ -409,13 +416,13 @@ inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>
       for (l=0; l<L;) {
         if (ASYNC) {
           fc();  // Clear affected vertices
-          V el = pagerankUpdateRanksAsyncOmp(r, xt, C0, P, fa, fu); ++l;  // Update ranks of vertices
+          V el = pagerankUpdateRanksAsyncOmp(r, vafc, xt, C0, P, fa, fu); ++l;  // Update ranks of vertices
           fs();  // Swap current and previous affected vertices
           if (el<E) break;  // Check tolerance
         }
         else {
           fc();  // Clear affected vertices
-          pagerankUpdateRanksOmp(a, xt, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
+          pagerankUpdateRanksOmp(a, vafc, xt, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
           V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
           swap(a, r);       // Final ranks in (r)
           fs();  // Swap current and previous affected vertices
@@ -424,7 +431,7 @@ inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>
       }
     });
   }, o.repeat);
-  return {r, l, t, ti/o.repeat, tm/o.repeat, tc/o.repeat};
+  return {r, l, t, ti/o.repeat, tm/o.repeat, tc/o.repeat, countValueOmp(vafc, char(1))};
 }
 #endif
 #pragma endregion
