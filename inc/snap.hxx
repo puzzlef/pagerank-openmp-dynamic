@@ -159,7 +159,7 @@ inline void readTemporalIfOmpW(G &a, istream& s, bool weighted, bool symmetric, 
   using K = typename G::key_type;
   using V = typename G::vertex_value_type;
   using E = typename G::edge_value_type;
-  addVerticesIfU(a, K(1), K(max(rows, cols)+1), V(), fv);
+  addVerticesIfU(a, K(1), K(rows+1), V(), fv);
   auto fb = [&](auto u, auto v, auto w) { if (fe(K(u), K(v), K(w))) addEdgeOmpU(a, K(u), K(v), E(w)); };
   readTemporalDoOmp(s, weighted, symmetric, rows, size, fb);
   updateOmpU(a);

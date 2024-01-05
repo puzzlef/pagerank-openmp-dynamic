@@ -48,7 +48,7 @@ void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size) {
   using K = typename G::key_type;
   using V = TYPE;
   int    repeat = REPEAT_METHOD;
-  double batchFraction = 1e-4;
+  double batchFraction = 1e-6;
   auto   fl = [](auto u) { return true; };
   // Follow a specific result logging format, which can be easily parsed later.
   auto glog  = [&](const auto& ans, const auto& ref, const char *technique, double deletionsf, double insertionsf, int batchIndex) {
@@ -60,26 +60,41 @@ void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size) {
     );
   };
   V tolerance = 1e-10;
-  V frontierTolerance = 1e-15;
-  V pruneTolerance    = 1e-15;
+  V frontierTolerance = 1e-12;
+  V pruneTolerance    = 1e-12;
+  vector<tuple<K, K>> deletions;
+  vector<tuple<K, K>> insertions;
   // Get ranks of vertices on original graph (static).
   auto r0 = pagerankStaticOmp(xt, PagerankOptions<V>(1, 1e-100));
+  auto R1 = r0.ranks;
+  auto R2 = r0.ranks;
+  auto R3 = r0.ranks;
   // Get ranks of vertices on updated graph (dynamic).
   for (int batchIndex=0; batchIndex<BATCH_LENGTH; ++batchIndex) {
     auto y = duplicate(x);
-    readTemporalOmpW(y, fstream, false, false, rows, size_t(batchFraction * size));
-    y  = addSelfLoopsOmp(y, None(), fl);
-    yt = transposeWithDegreeOmp(y);
+    insertions.clear();
+    auto fb = [&](auto u, auto v, auto w) {
+      insertions.push_back({u, v});
+      y.addEdge(u, v);
+    };
+    readTemporalDo(fstream, false, false, rows, size_t(batchFraction * size), fb);
+    updateOmpU(y);
+    auto yt = transposeWithDegreeOmp(y);
+    LOG(""); print(y); printf(" (insertions=%zu)\n", insertions.size());
+    auto s0 = pagerankStaticOmp(yt, PagerankOptions<V>(1, 1e-100));
     auto a0 = pagerankStaticOmp<false>(yt, PagerankOptions<V>(repeat, tolerance, frontierTolerance));
-    glog(a0, r0, "pagerankStaticOmp", 0.0, 0.0, batchIndex);
-    auto a1 = pagerankNaiveDynamicOmp<true>(yt, &r0.ranks, {repeat, tolerance, frontierTolerance});
-    glog(a1, r0, "pagerankNaiveDynamicOmp", 0.0, 0.0, batchIndex);
-    auto a2 = pagerankDynamicFrontierOmp<true, true>(x, xt, y, yt, None(), None(), &r0.ranks, {repeat, tolerance, frontierTolerance});
-    glog(a2, r0, "pagerankDynamicFrontierOmp", 0.0, 0.0, batchIndex);
-    auto a3 = pagerankDynamicTraversalOmp<true>(x, xt, y, yt, None(), None(), &r0.ranks, {repeat, tolerance, frontierTolerance});
-    glog(a3, r0, "pagerankDynamicTraversalOmp", 0.0, 0.0, batchIndex);
-    x  = move(y);
-    xt = move(yt);
+    glog(a0, s0, "pagerankStaticOmp", 0.0, batchFraction, batchIndex);
+    auto a1 = pagerankNaiveDynamicOmp<true>(yt, &R1, {repeat, tolerance, frontierTolerance});
+    glog(a1, s0, "pagerankNaiveDynamicOmp", 0.0, batchFraction, batchIndex);
+    auto a2 = pagerankDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &R2, {repeat, tolerance, frontierTolerance});
+    glog(a2, s0, "pagerankDynamicFrontierOmp", 0.0, batchFraction, batchIndex);
+    auto a3 = pagerankDynamicTraversalOmp<true>(x, xt, y, yt, deletions, insertions, &R3, {repeat, tolerance, frontierTolerance});
+    glog(a3, s0, "pagerankDynamicTraversalOmp", 0.0, batchFraction, batchIndex);
+    copyValuesOmpW(R1, a1.ranks);
+    copyValuesOmpW(R2, a2.ranks);
+    copyValuesOmpW(R3, a3.ranks);
+    swap(x,  y);
+    swap(xt, yt);
   }
 }
 
@@ -99,7 +114,7 @@ int main(int argc, char **argv) {
   LOG("Loading graph %s ...\n", file);
   DiGraph<uint32_t> x;
   ifstream fstream(file);
-  readTemporalOmpW(x, fstream, false, false, rows, size_t(0.80 * size)); LOG(""); println(x); printf(" (80%)\n");
+  readTemporalOmpW(x, fstream, false, false, rows, size_t(0.80 * size)); LOG(""); print(x); printf(" (80%%)\n");
   auto fl = [](auto u) { return true; };
   x = addSelfLoopsOmp(x, None(), fl);  LOG(""); print(x);  printf(" (selfLoopAllVertices)\n");
   auto xt = transposeWithDegreeOmp(x); LOG(""); print(xt); printf(" (transposeWithDegree)\n");

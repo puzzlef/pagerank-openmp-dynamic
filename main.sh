@@ -19,7 +19,7 @@ fi
 : "${REPEAT_METHOD:=1}"
 # Parameter sweep for batch (randomly generated)
 : "${BATCH_UNIT:=%}"
-: "${BATCH_LENGTH:=1}"
+: "${BATCH_LENGTH:=10}"
 # Define macros (dont forget to add here)
 DEFINES=(""
 "-DTYPE=$TYPE"
@@ -33,8 +33,8 @@ DEFINES=(""
 # Run
 g++ ${DEFINES[*]} -std=c++17 -O3 -fopenmp main.cxx -o "a$1.out"
 # stdbuf --output=L ./"a$1.out" ~/Data/soc-Epinions1.mtx  2>&1 | tee -a "$out"
-stdbuf --output=L ./"a$1.out" ~/Data/wiki-talk-temporal.txt 1140149 7833140  3309592  2>&1 | tee -a "$out"
-stdbuf --output=L ./"a$1.out" ~/Data/sx-stackoverflow.txt   2601977 63497050 36233450 2>&1 | tee -a "$out"
+stdbuf --output=L ./"a$1.out" ~/Data/wiki-talk-temporal.txt 1140149  7833140  3309592  2>&1 | tee -a "$out"
+stdbuf --output=L ./"a$1.out" ~/Data/sx-stackoverflow.txt   26019770 63497050 36233450 2>&1 | tee -a "$out"
 
 # Signal completion
 curl -X POST "https://maker.ifttt.com/trigger/puzzlef/with/key/${IFTTT_KEY}?value1=$src$1"
