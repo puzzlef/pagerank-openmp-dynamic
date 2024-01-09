@@ -1,111 +1,92 @@
-Design of [OpenMP]-based **Dnamic** [PageRank algorithm] for [link analysis].
+Design of OpenMP-based Parallel Dynamic [PageRank algorithm] for measuring importance.
 
-Dynamic graphs, which change with time, have many applications. Computing ranks
-of vertices from scratch on every update (*static PageRank*) may not be good
-enough for an *interactive system*. In such cases, we only want to process ranks
-of vertices which are likely to have changed. To handle any new vertices
-added/removed, we first *adjust* the *previous ranks* (before the graph
-update/batch) with a *scaled 1/N-fill* approach [(1)][adjust-ranks]. Then, with
-**naive dynamic approach** we simply run the PageRank algorithm with the
-*initial ranks* set to the adjusted ranks. Alternatively, with the (fully)
-**dynamic approach** we first obtain a *subset of vertices* in the graph which
-are likely to be affected by the update (using BFS/DFS from changed vertices),
-and then perform PageRank computation on *only* this *subset of vertices*.
+PageRank serves as an algorithm assessing the significance of nodes within a network through the assignment of numerical scores based on link structure. Its applications span web page ranking, identification of misinformation, traffic flow prediction, and protein target identification. The growing availability of extensive graph-based data has spurred interest in parallel algorithms for PageRank computation.
 
-The input data used for the experiments given below is available from the
-[SuiteSparse Matrix Collection]. These experiments are done with guidance from
-[Prof. Kishore Kothapalli], [Prof. Dip Sankar Banerjee], and [Prof. Sathya Peri].
+In real-world scenarios, graphs often evolve over time, with frequent edge insertions and deletions rendering recomputation of PageRank from scratch impractical, especially for small, rapid changes. Existing strategies optimize by iterating from the previous snapshot's ranks, reducing the required iterations for convergence. To further enhance efficiency, it becomes crucial to recalibrate the ranks of only those vertices likely to undergo changes. A common approach entails identifying reachable vertices from the updated graph regions and limiting processing to such vertices. However, if updates are randomly distributed, they may frequently fall within dense graph regions, necessitating the processing of a substantial portion of the graph.
+
+To mitigate computational effort, one can incrementally expand the set of affected vertices from the updated graph region, rather than processing all reachable vertices from the initial iteration. Moreover, it is possible to skip processing a vertex's neighbors if the change in its rank is small and expected to have minimal impact on the ranks of neighboring vertices. Here, we introduce the Dynamic Frontier approach for Updating PageRank, which addresses these considerations.
 
 <br>
 
 
-### Comparision with Ordered approach
+Below we plot the average time taken by Static, Naive-dynamic, Dynamic Traversal, and Dynamic Frontier PageRank on batch updates of size `10^-7|E|` to `0.1|E|`, consisting of `80%` insertions and `20%` deletions (to simulate realistic graph updates), on 12 different graphs. Dynamic Frontier PageRank is on average `7.6×`, `2.8×`, and `4.1×` faster than Static, Naive-dynamic, and Dynamic Traversal PageRank, while obtaining ranks of better accuracy/error than Static PageRank, and of similar accuracy/error as Naive-dynamic and Dynamic Traversal PageRank.
 
-**Unordered PageRank** is the *standard* method of calculating PageRank (as given
-in the original PageRank paper by Larry Page et al. [(1)][pagerank-original]),
-where *two* *rank vectors* are maintained; one denotes the *present* ranks of
-vertices, and the other denotes the *previous* ranks. On the contrary, **ordered**
-**PageRank** uses only *one rank vector*, denoting the present ranks [(2)][pagerank].
-This is similar to barrierless non-blocking PageRank implementations by
-Hemalatha Eedi et al. [(3)][barrierfrees]. As ranks are updated in the same
-vector (with each iteration), the order in which ranks of vertices are
-calculated *affects* the final result (hence the modifier *ordered*). However,
-PageRank is an iteratively converging algorithm, and thus ranks obtained with
-either approach are *mostly identical*.
+[![](https://i.imgur.com/JO30mPv.png)][sheets-o1]
 
-In this experiment ([approach-ordered]), we measure the performance of
-**static**, **naive dynamic**, and (fully) **dynamic OpenMP-based ordered**
-**PageRank** (along with similar *sequential approaches*). We take *temporal*
-*graphs* as input, and add edges to our in-memory graph in batches of size
-`10^2` to `10^6`. However we do *not* perform this on every point on the
-temporal graph, but *only* on *5 time* *samples* of the graph (5 samples are
-good enough to obtain an average). At each time sample we load `B` edges (where
-*B* is the batch size), and perform *static*, *naive dynamic*, and *dynamic*
-ordered PageRank. At each time sample, each approach is performed *5 times* to
-obtain an average time for that sample.  A *schedule* of `dynamic, 2048` is used
-for *OpenMP-based PageRank* as obtained in [(5)][adjust-schedule]. We use the
-follwing PageRank parameters: damping factor `α = 0.85`, tolerance `τ = 10^-6`,
-and limit the maximum number of iterations to `L = 500.` The error between the
-present and the previous iteration is obtained with *L1-norm*, and is used to
-detect convergence. *Dead ends* in the graph are dealt with by always
-teleporting any vertex in the graph at random (*teleport* approach
-[(6)][dead-ends]). Error in ranks obtained for each approach is measured
-relative to the *sequential static approach* using *L1-norm*.
+Below we plot the speedup of Dynamic Frontier PageRank wrt Static, Naive-dynamic, and Dynamic Traversal PageRank.
 
-From the results, we observe that **naive dynamic and dynamic PageRank are**
-**significantly faster than static PageRank for small batch sizes**. However
-**as** **the batch size increases**, the **separation** between static and the
-two dynamic approaches **reduce** (as you would expect). Interestingly we note
-that (again) there seems to be *little to no difference* between *naive dynamic*
-and *dynamic* PageRank. As dynamic PageRank has an added cost of finding the
-subset of vertices which might be affected (for which time taken is not
-considered here), it seems that **using naive dynamic PageRank is a better**
-**option** (which is also easier to implement). We also observe that the
-iterations required for OpenMP-based approaches is slightly higher than the
-sequential approaches. This may be due to the multithreaded OpenMP-based
-approaches becoming closer in behavior to an unordered approach (due to parallel
-threads).
+[![](https://i.imgur.com/DvnTMi0.png)][sheets-o1]
 
-[approach-ordered]: https://github.com/puzzlef/pagerank-openmp-dynamic-tofu/tree/approach-ordered
+Next, we plot the Error comparison of Static, Naive-dynamic, Dynamic Traversal, and Dynamic Frontier PageRank with respect to a Reference Static PageRank (with a tolerance `𝜏` of `10^−100` and limited to `500` iterations), using L1-norm.
+
+[![](https://i.imgur.com/PjNa3TD.png)][sheets-o1]
+
+Finally, we plot the strong scaling behaviour of Dynamic Frontier PageRank. With doubling of threads, Dynamic Frontier PageRank exhibits an average performance scaling of `1.8×`.
+
+[![](https://i.imgur.com/HIoANIs.png)][sheets-o2]
+
+Refer to our technical report for more details:
+[An Incrementally Expanding Approach for Updating PageRank on Dynamic Graphs][report].
 
 <br>
 
+> [!NOTE]
+> You can just copy `main.sh` to your system and run it. \
+> For the code, refer to `main.cxx`.
 
-### Comparision with Static approach
+[PageRank algorithm]: https://www.cis.upenn.edu/~mkearns/teaching/NetworkedLife/pagerank.pdf
+[Prof. Dip Sankar Banerjee]: https://sites.google.com/site/dipsankarban/
+[Prof. Kishore Kothapalli]: https://faculty.iiit.ac.in/~kkishore/
+[Prof. Sathya Peri]: https://people.iith.ac.in/sathya_p/
+[SuiteSparse Matrix Collection]: https://sparse.tamu.edu
+[sheets-o1]: https://docs.google.com/spreadsheets/d/1gAPAmS6mLoZ2VqhUp0Y60BSZW-IR-SxaDLnsfRJqwig/edit?usp=sharing
+[sheets-o2]: https://docs.google.com/spreadsheets/d/1S1Iciq3z3rKoBb4gY_oyOw8RMB0-2Z7vD3-jKus4bx8/edit?usp=sharing
+[report]: https://arxiv.org/abs/2401.03256
 
-In this experiment ([compare-static]), we compare the performance of **static**,
-**naive dynamic**, and (fully) **dynamic OpenMP-based PageRank** (along with
-similar *sequential approaches*). We take *temporal graphs* as input, and add
-edges to our in-memory graph in batches of size `10^2 to 10^6`. However we do
-*not* perform this on every point on the temporal graph, but *only* on *5 time*
-*samples* of the graph (5 samples are good enough to obtain an average). At each
-time sample we load `B` edges (where *B* is the batch size), and perform
-*static*, *naive dynamic*, and *dynamic* PageRank. At each time sample, each
-approach is performed *5* *times* to obtain an average time for that sample.  A
-*schedule* of `dynamic, 2048` is used for *OpenMP-based PageRank* as obtained in
-[(2)][adjust-schedule]. We use the follwing PageRank parameters: damping factor
-`α = 0.85`, tolerance `τ = 10^-6`, and limit the maximum number of iterations to
-`L = 500.` The error between the current and the previous iteration is obtained
-with *L1-norm*, and is used to detect convergence. *Dead ends* in the graph are
-handled by always teleporting any vertex in the graph at random (*teleport*
-approach [(3)][dead-ends]). Error in ranks obtained for each approach is
-measured relative to the *sequential static approach* using *L1-norm*.
+<br>
+<br>
 
-From the results, we observe that **naive dynamic and dynamic PageRank are**
-**significantly faster than static PageRank for small batch sizes**. However **as**
-**the batch size increases**, the **gap** between static and the two dynamic
-approaches **decreases** (as one would expect). However, interestingly we note
-that there seems to be *little to no difference* between *naive dynamic* and
-*dynamic* PageRank. As dynamic PageRank has an added cost of finding the subset
-of vertices which might be affected (for which time taken is not considered
-here), it seems that **using naive dynamic PageRank is a better option** (which
-is also easier to implement). All outputs are saved in a [gist]. Some [charts]
-are also included below, generated from [sheets].
 
-[![](https://i.imgur.com/n7Qvkqt.png)][sheetp]
-[![](https://i.imgur.com/wn8Lthe.png)][sheetp]
+### Code structure
 
-[compare-static]: https://github.com/puzzlef/pagerank-openmp-dynamic-tofu/tree/compare-static
+The code structure of Dynamic Frontier PageRank is as follows:
+
+```bash
+- inc/_algorithm.hxx: Algorithm utility functions
+- inc/_bitset.hxx: Bitset manipulation functions
+- inc/_cmath.hxx: Math functions
+- inc/_ctypes.hxx: Data type utility functions
+- inc/_cuda.hxx: CUDA utility functions
+- inc/_debug.hxx: Debugging macros (LOG, ASSERT, ...)
+- inc/_iostream.hxx: Input/output stream functions
+- inc/_iterator.hxx: Iterator utility functions
+- inc/_main.hxx: Main program header
+- inc/_mpi.hxx: MPI (Message Passing Interface) utility functions
+- inc/_openmp.hxx: OpenMP utility functions
+- inc/_queue.hxx: Queue utility functions
+- inc/_random.hxx: Random number generation functions
+- inc/_string.hxx: String utility functions
+- inc/_utility.hxx: Runtime measurement functions
+- inc/_vector.hxx: Vector utility functions
+- inc/batch.hxx: Batch update generation functions
+- inc/bfs.hxx: Breadth-first search algorithms
+- inc/csr.hxx: Compressed Sparse Row (CSR) data structure functions
+- inc/dfs.hxx: Depth-first search algorithms
+- inc/duplicate.hxx: Graph duplicating functions
+- inc/Graph.hxx: Graph data structure functions
+- inc/main.hxx: Main header
+- inc/mtx.hxx: Graph file reading functions
+- inc/pagerank.hxx: PageRank algorithm functions
+- inc/properties.hxx: Graph Property functions
+- inc/selfLoop.hxx: Graph Self-looping functions
+- inc/symmetricize.hxx: Graph Symmetricization functions
+- inc/transpose.hxx: Graph transpose functions
+- inc/update.hxx: Update functions
+- main.cxx: Experimentation code
+- process.js: Node.js script for processing output logs
+```
+
+Note that each branch in this repository contains code for a specific experiment. The `main` branch contains code for the final experiment. If the intention of a branch in unclear, or if you have comments on our technical report, feel free to open an issue.
 
 <br>
 <br>
@@ -123,25 +104,5 @@ are also included below, generated from [sheets].
 <br>
 
 
-[![](https://i.imgur.com/sO7WDHn.jpg)](https://in.pinterest.com/pin/636837203543731147/)<br>
+[![](https://i.imgur.com/HIT03Bu.jpg)](https://www.youtube.com/watch?v=yqO7wVBTuLw&pp)<br>
 [![ORG](https://img.shields.io/badge/org-puzzlef-green?logo=Org)](https://puzzlef.github.io)
-[![DOI](https://zenodo.org/badge/531797868.svg)](https://zenodo.org/badge/latestdoi/531797868)
-
-
-[pagerank-original]: https://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.38.5427
-[pagerank]: https://github.com/puzzlef/pagerank
-[barrierfrees]: https://ieeexplore.ieee.org/document/9407114
-[adjust-ranks]: https://gist.github.com/wolfram77/eb7a3b2e44e3c2069e046389b45ead03
-[adjust-schedule]: https://github.com/puzzlef/pagerank-openmp
-[dead-ends]: https://gist.github.com/wolfram77/94c38b9cfbf0c855e5f42fa24a8602fc
-[Prof. Dip Sankar Banerjee]: https://sites.google.com/site/dipsankarban/
-[Prof. Kishore Kothapalli]: https://faculty.iiit.ac.in/~kkishore/
-[Prof. Sathya Peri]: https://people.iith.ac.in/sathya_p/
-[SuiteSparse Matrix Collection]: https://sparse.tamu.edu
-[OpenMP]: https://en.wikipedia.org/wiki/OpenMP
-[PageRank algorithm]: https://en.wikipedia.org/wiki/PageRank
-[link analysis]: https://en.wikipedia.org/wiki/Network_theory#Link_analysis
-[gist]: https://gist.github.com/wolfram77/170158f966f6c18757434dfa5ba0663f
-[charts]: https://imgur.com/a/4RzD9uD
-[sheets]: https://docs.google.com/spreadsheets/d/1R4orGRDO_8cKxNOhz48euJQaJ8KyWQ7moxdvruOBN8Y/edit?usp=sharing
-[sheetp]: https://docs.google.com/spreadsheets/d/e/2PACX-1vTNA8K91pvoCNlXwt6m-N9Mo3GUHU-JeFL6CwrcVOktN1zpYgJt5Z1jJMPt3We5m1cxjrQcfVO3Qrl3/pubhtml
