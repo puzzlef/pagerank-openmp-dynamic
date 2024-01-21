@@ -15,11 +15,11 @@ fi
 # Fixed config
 : "${TYPE:=double}"
 : "${MAX_THREADS:=64}"
-: "${REPEAT_BATCH:=5}"
+: "${REPEAT_BATCH:=1}"
 : "${REPEAT_METHOD:=1}"
 # Parameter sweep for batch (randomly generated)
 : "${BATCH_UNIT:=%}"
-: "${BATCH_LENGTH:=10}"
+: "${BATCH_LENGTH:=100}"
 # Define macros (dont forget to add here)
 DEFINES=(""
 "-DTYPE=$TYPE"
@@ -31,10 +31,12 @@ DEFINES=(""
 )
 
 # Run
-g++ ${DEFINES[*]} -std=c++17 -O3 -fopenmp main.cxx -o "a$1.out"
-# stdbuf --output=L ./"a$1.out" ~/Data/soc-Epinions1.mtx  2>&1 | tee -a "$out"
-stdbuf --output=L ./"a$1.out" ~/Data/wiki-talk-temporal.txt 1140149  7833140  3309592  2>&1 | tee -a "$out"
-stdbuf --output=L ./"a$1.out" ~/Data/sx-stackoverflow.txt   26019770 63497050 36233450 2>&1 | tee -a "$out"
+g++ ${DEFINES[*]} -std=c++17 -O3 -fopenmp main.cxx
+stdbuf --output=L ./a.out ~/Data/sx-mathoverflow.txt    248180   506550   239978   2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/sx-askubuntu.txt       1593160  964437   596933   2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/sx-superuser.txt       1940850  1443339  924886   2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/wiki-talk-temporal.txt 11401490 7833140  3309592  2>&1 | tee -a "$out"
+stdbuf --output=L ./a.out ~/Data/sx-stackoverflow.txt   26019770 63497050 36233450 2>&1 | tee -a "$out"
 
 # Signal completion
 curl -X POST "https://maker.ifttt.com/trigger/puzzlef/with/key/${IFTTT_KEY}?value1=$src$1"
