@@ -9,7 +9,7 @@ if [[ "$DOWNLOAD" != "0" ]]; then
   rm -rf $src
   git clone https://github.com/puzzlef/$src
   cd $src
-  git checkout measure-temporal-pruning
+  git checkout measure-temporal-pruning-narrowed
 fi
 
 # Fixed config
