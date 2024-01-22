@@ -5,7 +5,7 @@ const path = require('path');
 const ROMPTH = /^OMP_NUM_THREADS=(\d+)/m;
 const RGRAPH = /^Loading graph .*\/(.+?)\.txt \.\.\./m;
 const RORDER = /^order: (\d+) size: (\d+) \[directed\] \{\}/m;
-const RRESLT = /^\{\-(.+?)\/\+(.+?) batchf, (.+?) batchi, (.+?) frontier\} -> \{(.+?)ms, (.+?)ms init, (.+?)ms mark, (.+?)ms comp, (.+?) iter, (.+?) err\} (\w+)/m;
+const RRESLT = /^\{\-(.+?)\/\+(.+?) batchf, (.+?) batchi, (.+?) frontier, (.+?) prune\} -> \{(.+?)ms, (.+?)ms init, (.+?)ms mark, (.+?)ms comp, (.+?) iter, (.+?) err\} (\w+)/m;
 
 
 
@@ -60,7 +60,7 @@ function readLogLine(ln, data, state) {
   }
   else if (RRESLT.test(ln)) {
     var [,
-      batch_deletions_fraction, batch_insertions_fraction, batch_index, frontier_tolerance,
+      batch_deletions_fraction, batch_insertions_fraction, batch_index, frontier_tolerance, prune_tolerance,
       time, initialization_time, marking_time, computation_time,
       iterations, error, technique,
     ] = RRESLT.exec(ln);
@@ -69,6 +69,7 @@ function readLogLine(ln, data, state) {
       batch_insertions_fraction: parseFloat(batch_insertions_fraction),
       batch_index:               parseFloat(batch_index),
       frontier_tolerance:        parseFloat(frontier_tolerance),
+      prune_tolerance:           parseFloat(prune_tolerance),
       time:                parseFloat(time),
       initialization_time: parseFloat(initialization_time),
       marking_time:        parseFloat(marking_time),
