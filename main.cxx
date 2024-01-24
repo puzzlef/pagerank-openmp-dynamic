@@ -142,8 +142,8 @@ void runExperiment(const G& x, const H& xt) {
         glog(ans, ref, technique, numThreads, deletionsf, insertionsf, frontierTolerance, pruneTolerance);
       };
       V tolerance = 1e-10;
-      V frontierTolerance = 1e-6;
-      V pruneTolerance    = 1e-6;
+      V frontierTolerance = 1e-9;
+      V pruneTolerance    = 1e-9;
       auto s0 = pagerankStaticOmp(yt, PagerankOptions<V>(1, 1e-100));
       // Find multi-threaded OpenMP-based Static PageRank.
       auto a0 = pagerankStaticOmp<false>(yt, PagerankOptions<V>(repeat, tolerance));
