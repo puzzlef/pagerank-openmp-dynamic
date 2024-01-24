@@ -43,13 +43,13 @@ using namespace std;
  * @param rows number of rows/vetices in the graph
  * @param size number of lines/edges (temporal) in the graph
  * @param batchFraction fraction of edges to use in each batch
+ * @param numThreads number of threads to use
  */
 template <class G, class H>
-void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size, double batchFraction) {
+void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size, double batchFraction, int numThreads) {
   using  K = typename G::key_type;
   using  V = TYPE;
   int repeat     = REPEAT_METHOD;
-  int numThreads = MAX_THREADS;
   // Follow a specific result logging format, which can be easily parsed later.
   auto glog  = [&](const auto& ans, const auto& ref, const char *technique, int numThreads, double deletionsf, double insertionsf, int batchIndex, V frontierTolerance=0.0, V pruneTolerance=0.0) {
     auto err = l1NormDeltaOmp(ans.ranks, ref.ranks);
@@ -66,8 +66,6 @@ void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size, doub
   vector<tuple<K, K>> insertions;
   // Get ranks of vertices on original graph (static).
   auto r0 = pagerankStaticOmp(xt, PagerankOptions<V>(1, 1e-100));
-  auto R10 = r0.ranks;
-  auto R20 = r0.ranks;
   auto R30 = r0.ranks;
   auto R31 = r0.ranks;
   // Get ranks of vertices on updated graph (dynamic).
@@ -83,22 +81,13 @@ void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size, doub
     auto yt = transposeWithDegreeOmp(y);
     LOG(""); print(y); printf(" (insertions=%zu)\n", insertions.size());
     auto s0 = pagerankStaticOmp(yt, PagerankOptions<V>(1, 1e-100));
-    // Find multi-threaded OpenMP-based Static PageRank.
-    auto a0 = pagerankStaticOmp<false>(yt, PagerankOptions<V>(repeat, tolerance));
-    glog(a0, s0, "pagerankStaticOmp", numThreads, 0.0, batchFraction, batchIndex);
-    // Find multi-threaded OpenMP-based Naive-dynamic PageRank.
-    auto a1 = pagerankNaiveDynamicOmp<true>(yt, &R10, {repeat, tolerance});
-    glog(a1, s0, "pagerankNaiveDynamicOmp", numThreads, 0.0, batchFraction, batchIndex);
-    // Find multi-threaded OpenMP-based Traversal-based Dynamic PageRank.
-    auto a2 = pagerankDynamicTraversalOmp<true>(x, xt, y, yt, deletions, insertions, &R20, {repeat, tolerance});
-    glog(a2, s0, "pagerankDynamicTraversalOmp", numThreads, 0.0, batchFraction, batchIndex);
     // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank.
+    omp_set_num_threads(numThreads);
     auto a3 = pagerankDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &R30, {repeat, tolerance, frontierTolerance});
     glog(a3, s0, "pagerankDynamicFrontierOmp", numThreads, 0.0, batchFraction, batchIndex, frontierTolerance);
     auto b3 = pagerankPruneDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &R31, {repeat, tolerance, frontierTolerance, pruneTolerance});
     glog(b3, s0, "pagerankPruneDynamicFrontierOmp", numThreads, 0.0, batchFraction, batchIndex, frontierTolerance, pruneTolerance);
-    copyValuesOmpW(R10, a1.ranks);
-    copyValuesOmpW(R20, a2.ranks);
+    omp_set_num_threads(MAX_THREADS);
     copyValuesOmpW(R30, a3.ranks);
     copyValuesOmpW(R31, b3.ranks);
     swap(x, y);
@@ -118,8 +107,9 @@ int main(int argc, char **argv) {
   size_t rows = strtoull(argv[2], nullptr, 10);
   size_t size = strtoull(argv[3], nullptr, 10);
   double batchFraction = strtod(argv[5], nullptr);
+  int    numThreads    = strtoul(argv[6], nullptr, 10);
   omp_set_num_threads(MAX_THREADS);
-  LOG("OMP_NUM_THREADS=%d\n", MAX_THREADS);
+  LOG("OMP_NUM_THREADS=%d\n", numThreads);
   LOG("Loading graph %s ...\n", file);
   DiGraph<uint32_t> x;
   ifstream fstream(file);
@@ -127,7 +117,7 @@ int main(int argc, char **argv) {
   auto fl = [](auto u) { return true; };
   x = addSelfLoopsOmp(x, None(), fl);  LOG(""); print(x);  printf(" (selfLoopAllVertices)\n");
   auto xt = transposeWithDegreeOmp(x); LOG(""); print(xt); printf(" (transposeWithDegree)\n");
-  runExperiment(x, xt, fstream, rows, size, batchFraction);
+  runExperiment(x, xt, fstream, rows, size, batchFraction, numThreads);
   printf("\n");
   return 0;
 }
