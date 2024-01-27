@@ -54,9 +54,9 @@ void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size, doub
   auto glog  = [&](const auto& ans, const auto& ref, const char *technique, int numThreads, double deletionsf, double insertionsf, int batchIndex, V frontierTolerance=0.0, V pruneTolerance=0.0) {
     auto err = l1NormDeltaOmp(ans.ranks, ref.ranks);
     printf(
-      "{-%.3e/+%.3e batchf, %03d batchi, %03d threads, %.0e frontier, %.0e prune} -> {%09.1fms, %09.1fms init, %09.1fms mark, %09.1fms comp, %03d iter, %.2e err} %s\n",
+      "{-%.3e/+%.3e batchf, %03d batchi, %03d threads, %.0e frontier, %.0e prune} -> {%09.1fms, %09.1fms init, %09.1fms mark, %09.1fms comp, %03d iter, %.2e err, %.3e aff} %s\n",
       deletionsf, insertionsf, batchIndex, numThreads, frontierTolerance, pruneTolerance,
-      ans.time, ans.initializationTime, ans.markingTime, ans.computationTime, ans.iterations, err, technique
+      ans.time, ans.initializationTime, ans.markingTime, ans.computationTime, ans.iterations, err, double(ans.affectedVertices), technique
     );
   };
   V tolerance = 1e-10;
@@ -66,7 +66,7 @@ void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size, doub
   vector<tuple<K, K>> insertions;
   // Get ranks of vertices on original graph (static).
   auto r0 = pagerankStaticOmp(xt, PagerankOptions<V>(1, 1e-100));
-  auto R10 = r0.ranks;
+  // auto R10 = r0.ranks;
   auto R20 = r0.ranks;
   auto R30 = r0.ranks;
   auto R31 = r0.ranks;
@@ -82,22 +82,22 @@ void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size, doub
     updateOmpU(y);
     auto yt = transposeWithDegreeOmp(y);
     LOG(""); print(y); printf(" (insertions=%zu)\n", insertions.size());
-    auto s0 = pagerankStaticOmp(yt, PagerankOptions<V>(1, 1e-100));
+    // auto s0 = pagerankStaticOmp(yt, PagerankOptions<V>(1, 1e-100));
     // Find multi-threaded OpenMP-based Static PageRank.
-    auto a0 = pagerankStaticOmp<false>(yt, PagerankOptions<V>(repeat, tolerance));
-    glog(a0, s0, "pagerankStaticOmp", numThreads, 0.0, batchFraction, batchIndex);
+    // auto a0 = pagerankStaticOmp<false>(yt, PagerankOptions<V>(repeat, tolerance));
+    // glog(a0, s0, "pagerankStaticOmp", numThreads, 0.0, batchFraction, batchIndex);
     // Find multi-threaded OpenMP-based Naive-dynamic PageRank.
-    auto a1 = pagerankNaiveDynamicOmp<true>(yt, &R10, {repeat, tolerance});
-    glog(a1, s0, "pagerankNaiveDynamicOmp", numThreads, 0.0, batchFraction, batchIndex);
+    // auto a1 = pagerankNaiveDynamicOmp<true>(yt, &R10, {repeat, tolerance});
+    // glog(a1, s0, "pagerankNaiveDynamicOmp", numThreads, 0.0, batchFraction, batchIndex);
     // Find multi-threaded OpenMP-based Traversal-based Dynamic PageRank.
     auto a2 = pagerankDynamicTraversalOmp<true>(x, xt, y, yt, deletions, insertions, &R20, {repeat, tolerance});
-    glog(a2, s0, "pagerankDynamicTraversalOmp", numThreads, 0.0, batchFraction, batchIndex);
+    glog(a2, r0, "pagerankDynamicTraversalOmp", numThreads, 0.0, batchFraction, batchIndex);
     // Find multi-threaded OpenMP-based Frontier-based Dynamic PageRank.
     auto a3 = pagerankDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &R30, {repeat, tolerance, frontierTolerance});
-    glog(a3, s0, "pagerankDynamicFrontierOmp", numThreads, 0.0, batchFraction, batchIndex, frontierTolerance);
+    glog(a3, r0, "pagerankDynamicFrontierOmp", numThreads, 0.0, batchFraction, batchIndex, frontierTolerance);
     auto b3 = pagerankPruneDynamicFrontierOmp<true, true>(x, xt, y, yt, deletions, insertions, &R31, {repeat, tolerance, frontierTolerance, pruneTolerance});
-    glog(b3, s0, "pagerankPruneDynamicFrontierOmp", numThreads, 0.0, batchFraction, batchIndex, frontierTolerance, pruneTolerance);
-    copyValuesOmpW(R10, a1.ranks);
+    glog(b3, r0, "pagerankPruneDynamicFrontierOmp", numThreads, 0.0, batchFraction, batchIndex, frontierTolerance, pruneTolerance);
+    // copyValuesOmpW(R10, a1.ranks);
     copyValuesOmpW(R20, a2.ranks);
     copyValuesOmpW(R30, a3.ranks);
     copyValuesOmpW(R31, b3.ranks);

@@ -113,8 +113,8 @@ inline V pagerankPruneUpdateRanksAsync(vector<V>& a, vector<B>& vafe, const G& x
  * @param D frontier tolerance
  * @param C prune tolerance
  */
-template <bool ASYNCF=false, class G, class H, class V, class B>
-inline void pagerankPruneUpdateRanksOmp(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<V>& r, const vector<B>& vaff, V C0, V P, V D, V C) {
+template <bool ASYNCF=false, class G, class H, class V, class B, class FG>
+inline void pagerankPruneUpdateRanksOmp(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<V>& r, const vector<B>& vaff, V C0, V P, V D, V C, FG fg) {
   using  K = typename H::key_type;
   size_t S = xt.span();
   #pragma omp parallel for schedule(dynamic, 2048)
@@ -127,7 +127,7 @@ inline void pagerankPruneUpdateRanksOmp(vector<V>& a, vector<B>& vafe, const G& 
     if (!ASYNCF) { if (eu > C) vafe[u] = B(1); }
     else         { if (eu/max(ru, au) <= C) vafe[u] = B(0); }
     if (eu/max(ru, au) <= D) continue;
-    x.forEachEdgeKey(u, [&](auto v) { if (v!=u && !vafe[v]) vafe[v] = B(1); });
+    x.forEachEdgeKey(u, [&](auto v) { if (v!=u && !vafe[v]) { vafe[v] = B(1); fg(v); } });
   }
 }
 
@@ -144,8 +144,8 @@ inline void pagerankPruneUpdateRanksOmp(vector<V>& a, vector<B>& vafe, const G& 
  * @param D frontier tolerance
  * @param C prune tolerance
  */
-template <bool ASYNCF=false, class G, class H, class V, class B>
-inline V pagerankPruneUpdateRanksAsyncOmp(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<B>& vaff, V C0, V P, V D, V C) {
+template <bool ASYNCF=false, class G, class H, class V, class B, class FG>
+inline V pagerankPruneUpdateRanksAsyncOmp(vector<V>& a, vector<B>& vafe, const G& x, const H& xt, const vector<B>& vaff, V C0, V P, V D, V C, FG fg) {
   using  K = typename H::key_type;
   size_t S = xt.span();
   V el = V();
@@ -160,7 +160,7 @@ inline V pagerankPruneUpdateRanksAsyncOmp(vector<V>& a, vector<B>& vafe, const G
     if (!ASYNCF) { if (eu > C) vafe[u] = B(1); }
     else         { if (eu/max(ru, au) <= C) vafe[u] = B(0); }
     if (eu/max(ru, au) <= D) continue;
-    x.forEachEdgeKey(u, [&](auto v) { if (v!=u && !vafe[v]) vafe[v] = B(1); });
+    x.forEachEdgeKey(u, [&](auto v) { if (v!=u && !vafe[v]) { vafe[v] = B(1); fg(v); } });
   }
   return el;
 }
@@ -248,6 +248,7 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
   int L  = o.maxIterations, l = 0;
   vector<V> r(S), a;
   vector<B> vaff(S), vafe;
+  vector<B> vafg(S);
   if (!ASYNC)  a.resize(S);
   if (!ASYNCF) vafe.resize(S);
   float ti = 0, tm = 0, tc = 0;
@@ -256,19 +257,21 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
     ti += measureDuration([&]() { fi(a, r); });
     // Mark affected vertices.
     tm += measureDuration([&]() { fm(vaff); });
+    copyValuesOmpW(vafg, vaff);
+    auto fg = [&](auto v) { vafg[v] = B(1); };
     // Compute ranks.
     tc += measureDuration([&]() {
       const V C0 = (1-P)/S;
       for (l=0; l<L;) {
         if (ASYNC) {
           if (!ASYNCF) fillValueOmpU(vafe, B(0));  // Reset affected vertices for next iteration
-          V el = pagerankPruneUpdateRanksAsyncOmp<ASYNCF>(r, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
+          V el = pagerankPruneUpdateRanksAsyncOmp<ASYNCF>(r, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C, fg); ++l;  // Update ranks of vertices
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
           if (el<E) break;   // Check tolerance
         }
         else {
           if (!ASYNCF) fillValueOmpU(vafe, B(0));  // Reset affected vertices for next iteration
-          pagerankPruneUpdateRanksOmp<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, r, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
+          pagerankPruneUpdateRanksOmp<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, r, vaff, C0, P, D, C, fg); ++l;  // Update ranks of vertices
           V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
           swap(a, r);        // Final ranks in (r)
@@ -277,7 +280,7 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
       }
     });
   }, o.repeat);
-  return {r, l, t, ti/o.repeat, tm/o.repeat, tc/o.repeat};
+  return {r, l, t, ti/o.repeat, tm/o.repeat, tc/o.repeat, countValueOmp(vafg, B(1))};
 }
 #endif
 #pragma endregion

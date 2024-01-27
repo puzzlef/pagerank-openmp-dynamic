@@ -76,6 +76,8 @@ struct PagerankResult {
   float markingTime;
   /** Average time taken to compute ranks. */
   float computationTime;
+  /** Number of vertices affected. */
+  size_t affectedVertices;
   #pragma endregion
 
 
@@ -84,7 +86,7 @@ struct PagerankResult {
    * Define empty PageRank result.
    */
   PagerankResult() :
-  ranks(), iterations(0), time(0), initializationTime(0), markingTime(0), computationTime(0) {}
+  ranks(), iterations(0), time(0), initializationTime(0), markingTime(0), computationTime(0), affectedVertices(0) {}
 
   /**
    * Define a PageRank result.
@@ -94,9 +96,10 @@ struct PagerankResult {
    * @param initializationTime average time taken to initialize ranks
    * @param markingTime average time taken to mark affected vertices
    * @param computationTime average time taken to compute ranks
+   * @param affectedVertices number of vertices affected
    */
-  PagerankResult(vector<V>&& ranks, int iterations=0, float time=0, float initializationTime=0, float markingTime=0, float computationTime=0) :
-  ranks(ranks), iterations(iterations), time(time), initializationTime(initializationTime), markingTime(markingTime), computationTime(computationTime) {}
+  PagerankResult(vector<V>&& ranks, int iterations=0, float time=0, float initializationTime=0, float markingTime=0, float computationTime=0, size_t affectedVertices=0) :
+  ranks(ranks), iterations(iterations), time(time), initializationTime(initializationTime), markingTime(markingTime), computationTime(computationTime), affectedVertices(affectedVertices) {}
 
   /**
    * Define a PageRank result.
@@ -106,9 +109,10 @@ struct PagerankResult {
    * @param initializationTime average time taken to initialize ranks
    * @param markingTime average time taken to mark affected vertices
    * @param computationTime average time taken to compute ranks
+   * @param affectedVertices number of vertices affected
    */
-  PagerankResult(vector<V>& ranks, int iterations=0, float time=0, float initializationTime=0, float markingTime=0, float computationTime=0) :
-  ranks(move(ranks)), iterations(iterations), time(time), initializationTime(initializationTime), markingTime(markingTime), computationTime(computationTime) {}
+  PagerankResult(vector<V>& ranks, int iterations=0, float time=0, float initializationTime=0, float markingTime=0, float computationTime=0, size_t affectedVertices=0) :
+  ranks(move(ranks)), iterations(iterations), time(time), initializationTime(initializationTime), markingTime(markingTime), computationTime(computationTime), affectedVertices(affectedVertices) {}
   #pragma endregion
 };
 #pragma endregion
@@ -611,7 +615,9 @@ inline PagerankResult<V> pagerankDynamicTraversalOmp(const G& x, const H& xt, co
   auto fu = [ ](auto u, auto ru, auto au) { };
   auto fc = [ ]() { };
   auto fs = [ ]() { };
-  return pagerankInvokeOmp<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
+  auto a  = pagerankInvokeOmp<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
+  a.affectedVertices = countValueOmp(vaff, FLAG(1));
+  return a;
 }
 #endif
 #pragma endregion
@@ -725,7 +731,9 @@ inline PagerankResult<V> pagerankDynamicFrontierOmp(const G& x, const H& xt, con
   };
   auto fc = [&]() { if (!ASYNCF) fillValueU(vafe, FLAG(0)); };
   auto fs = [&]() { if (!ASYNCF) swap(vaff, vafe); };
-  return pagerankInvokeOmp<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
+  auto a  = pagerankInvokeOmp<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
+  a.affectedVertices = countValueOmp(vaff, FLAG(1));
+  return a;
 }
 #endif
 #pragma endregion
