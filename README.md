@@ -4,29 +4,26 @@ PageRank serves as an algorithm assessing the significance of nodes within a net
 
 In real-world scenarios, graphs often evolve over time, with frequent edge insertions and deletions rendering recomputation of PageRank from scratch impractical, especially for small, rapid changes. Existing strategies optimize by iterating from the previous snapshot's ranks, reducing the required iterations for convergence. To further enhance efficiency, it becomes crucial to recalibrate the ranks of only those vertices likely to undergo changes. A common approach entails identifying reachable vertices from the updated graph regions and limiting processing to such vertices. However, if updates are randomly distributed, they may frequently fall within dense graph regions, necessitating the processing of a substantial portion of the graph.
 
-To mitigate computational effort, one can incrementally expand the set of affected vertices from the updated graph region, rather than processing all reachable vertices from the initial iteration. Moreover, it is possible to skip processing a vertex's neighbors if the change in its rank is small and expected to have minimal impact on the ranks of neighboring vertices. Here, we introduce the Dynamic Frontier approach for Updating PageRank, which addresses these considerations.
+To mitigate computational effort, one can incrementally expand the set of affected vertices from the updated graph region, rather than processing all reachable vertices from the initial iteration. Moreover, it is possible to skip processing a vertex's neighbors if the change in its rank is small and expected to have minimal impact on the ranks of neighboring vertices. Here, we introduce the Dynamic Frontier (DF) anf Dynamic Frontier with Pruning (DF-P) approaches for Updating PageRank, which addresses these considerations.
 
 <br>
 
 
-Below we plot the average time taken by Static, Naive-dynamic, Dynamic Traversal, and Dynamic Frontier PageRank on batch updates of size `10^-7|E|` to `0.1|E|`, consisting of `80%` insertions and `20%` deletions (to simulate realistic graph updates), on 12 different graphs. Dynamic Frontier PageRank is on average `7.6×`, `2.8×`, and `4.1×` faster than Static, Naive-dynamic, and Dynamic Traversal PageRank, while obtaining ranks of better accuracy/error than Static PageRank, and of similar accuracy/error as Naive-dynamic and Dynamic Traversal PageRank.
+Below we plot the average time taken by Static, Naive-dynamic (ND), Dynamic Traversal (DT), our improved Dynamic Frontier (DF), and Dynamic Frontier with Pruning (DF-P) PageRank on 5 real-world dynamic graphs, with batch updates of size `10^-5|Eᴛ|` to `10^-3|Eᴛ|`. The labels indicate the speedup of each approach with respect to Static PageRank. DF PageRank is, on average, `8.0×`, `4.5×`, and `3.2×` faster than Static PageRank, and is, on average, `1.3×`, `1.1×`, and `1.5×` faster than DT PageRank, a widely used approach for updating PageRank on dynamic graphs. In contrast, DF-P PageRank is, on average, `26.2×`, `11.9×`, and `7.5×` faster than Static PageRank and, on average, `4.2×`, `2.8×`, and `3.6×` faster than DT PageRank on identical batch updates.
 
-[![](https://i.imgur.com/JO30mPv.png)][sheets-o1]
+[![](https://i.imgur.com/YdjQWfH.png)][sheets-o1]
 
-Below we plot the speedup of Dynamic Frontier PageRank wrt Static, Naive-dynamic, and Dynamic Traversal PageRank.
+Next, we plot the Error comparison of Static, ND, DT, DF, and DF-P PageRank with respect to a Reference Static PageRank (with a tolerance `𝜏` of `10^−100` and limited to `500` iterations), using L1-norm.
 
-[![](https://i.imgur.com/DvnTMi0.png)][sheets-o1]
+[![](https://i.imgur.com/h2ZErIn.png)][sheets-o1]
 
-Next, we plot the Error comparison of Static, Naive-dynamic, Dynamic Traversal, and Dynamic Frontier PageRank with respect to a Reference Static PageRank (with a tolerance `𝜏` of `10^−100` and limited to `500` iterations), using L1-norm.
+Finally, we plot the strong scaling behaviour of DF and DF-P PageRank. With doubling of threads, DF PageRank exhibits an average performance scaling of `1.8×`, while DF-P PageRank exhibits an average performance scaling of `1.7×`.
 
-[![](https://i.imgur.com/PjNa3TD.png)][sheets-o1]
+[![](https://i.imgur.com/uahK7bg.png)][sheets-o2]
 
-Finally, we plot the strong scaling behaviour of Dynamic Frontier PageRank. With doubling of threads, Dynamic Frontier PageRank exhibits an average performance scaling of `1.8×`.
-
-[![](https://i.imgur.com/HIoANIs.png)][sheets-o2]
-
-Refer to our technical report for more details:
-[An Incrementally Expanding Approach for Updating PageRank on Dynamic Graphs][report].
+Refer to our technical reports for more details: \
+[An Incrementally Expanding Approach for Updating PageRank on Dynamic Graphs][report1]. \
+[DF* PageRank: Improved Incrementally Expanding Approaches for Updating PageRank on Dynamic Graphs][report2].
 
 <br>
 
@@ -41,7 +38,8 @@ Refer to our technical report for more details:
 [SuiteSparse Matrix Collection]: https://sparse.tamu.edu
 [sheets-o1]: https://docs.google.com/spreadsheets/d/1gAPAmS6mLoZ2VqhUp0Y60BSZW-IR-SxaDLnsfRJqwig/edit?usp=sharing
 [sheets-o2]: https://docs.google.com/spreadsheets/d/1S1Iciq3z3rKoBb4gY_oyOw8RMB0-2Z7vD3-jKus4bx8/edit?usp=sharing
-[report]: https://arxiv.org/abs/2401.03256
+[report1]: https://arxiv.org/abs/2401.03256
+[report2]: https://arxiv.org/abs/2401.15870
 
 <br>
 <br>
@@ -49,7 +47,7 @@ Refer to our technical report for more details:
 
 ### Code structure
 
-The code structure of Dynamic Frontier PageRank is as follows:
+The code structure of Dynamic Frontier (DF), and Dynamic Frontier with Pruning (DF-P) PageRank is as follows:
 
 ```bash
 - inc/_algorithm.hxx: Algorithm utility functions
@@ -76,7 +74,8 @@ The code structure of Dynamic Frontier PageRank is as follows:
 - inc/Graph.hxx: Graph data structure functions
 - inc/main.hxx: Main header
 - inc/mtx.hxx: Graph file reading functions
-- inc/pagerank.hxx: PageRank algorithm functions
+- inc/pagerank.hxx: PageRank algorithms
+- inc/pagerankPrune.hxx: Dynamic Frontier with Pruning PageRank algorithms
 - inc/properties.hxx: Graph Property functions
 - inc/selfLoop.hxx: Graph Self-looping functions
 - inc/symmetricize.hxx: Graph Symmetricization functions
@@ -104,5 +103,5 @@ Note that each branch in this repository contains code for a specific experiment
 <br>
 
 
-[![](https://i.imgur.com/HIT03Bu.jpg)](https://www.youtube.com/watch?v=yqO7wVBTuLw&pp)<br>
+[![](https://i.imgur.com/ol8RPAQ.jpg)](https://www.youtube.com/watch?v=yqO7wVBTuLw&pp)<br>
 [![ORG](https://img.shields.io/badge/org-puzzlef-green?logo=Org)](https://puzzlef.github.io)
