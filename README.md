@@ -105,3 +105,4 @@ Note that each branch in this repository contains code for a specific experiment
 
 [![](https://i.imgur.com/ol8RPAQ.jpg)](https://www.youtube.com/watch?v=yqO7wVBTuLw&pp)<br>
 [![ORG](https://img.shields.io/badge/org-puzzlef-green?logo=Org)](https://puzzlef.github.io)
+[![DOI](https://zenodo.org/badge/531797868.svg)](https://zenodo.org/doi/10.5281/zenodo.7044645)
