@@ -36,8 +36,8 @@ Refer to our technical reports for more details: \
 [Prof. Kishore Kothapalli]: https://faculty.iiit.ac.in/~kkishore/
 [Prof. Sathya Peri]: https://people.iith.ac.in/sathya_p/
 [SuiteSparse Matrix Collection]: https://sparse.tamu.edu
-[sheets-o1]: https://docs.google.com/spreadsheets/d/1gAPAmS6mLoZ2VqhUp0Y60BSZW-IR-SxaDLnsfRJqwig/edit?usp=sharing
-[sheets-o2]: https://docs.google.com/spreadsheets/d/1S1Iciq3z3rKoBb4gY_oyOw8RMB0-2Z7vD3-jKus4bx8/edit?usp=sharing
+[sheets-o1]: https://docs.google.com/spreadsheets/d/16_S5uZiZvPpEnTsZvg9LUQhh-sVYp4n89IWfRIF9lmA/edit?usp=sharing
+[sheets-o2]: https://docs.google.com/spreadsheets/d/1hfmyxosJoqWvYxWXO5UAaNVLiYEQ_r0Fvfe97X2FAsA/edit?usp=sharing
 [report1]: https://arxiv.org/abs/2401.03256
 [report2]: https://arxiv.org/abs/2401.15870
 
