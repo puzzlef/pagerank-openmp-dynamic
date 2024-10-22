@@ -4,7 +4,7 @@ authors:
   - family-names: Sahu
     given-names: Subhajit
     orcid: https://orcid.org/0000-0001-5140-6578
-title: "puzzlef/pagerank-openmp-dynamic: Design of OpenMP-based Parallel Dynamic PageRank algorithm for measuring importance"
-version: 2.0.0
-doi: 10.5281/zenodo.10593834
-date-released: 2024-01-30
+title: "DF* PageRank: Improved Incrementally Expanding Approaches for Updating PageRank on Dynamic Graphs"
+version: 1.0.0
+doi: 10.48550/arXiv.2401.15870
+date-released: 2024-01-29
