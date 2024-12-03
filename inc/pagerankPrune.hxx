@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include "_main.hxx"
+#include "pagerank.hxx"
 
 using std::tuple;
 using std::vector;
@@ -241,6 +242,8 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
   using  K = typename H::key_type;
   using  B = FLAG;
   size_t S = xt.span();
+  size_t N = xt.order();
+  size_t M = xt.size();
   V   P  = o.damping;
   V   E  = o.tolerance;
   V   D  = o.frontierTolerance;
@@ -250,23 +253,28 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
   vector<B> vaff(S), vafe;
   if (!ASYNC)  a.resize(S);
   if (!ASYNCF) vafe.resize(S);
+  auto  fa = [&](auto u) { return vaff[u]; };
   float ti = 0, tm = 0, tc = 0;
+  double AFF = 0;
   float t  = measureDuration([&]() {
     // Initialize rank of each vertex.
     ti += measureDuration([&]() { fi(a, r); });
     // Mark affected vertices.
     tm += measureDuration([&]() { fm(vaff); });
     // Compute ranks.
+    AFF = 0;
     tc += measureDuration([&]() {
       const V C0 = (1-P)/S;
       for (l=0; l<L;) {
         if (ASYNC) {
+          AFF += countAffectedEdgesOmp(xt, fa) / double(M);
           if (!ASYNCF) fillValueOmpU(vafe, B(0));  // Reset affected vertices for next iteration
           V el = pagerankPruneUpdateRanksAsyncOmp<ASYNCF>(r, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
           if (el<E) break;   // Check tolerance
         }
         else {
+          AFF += countAffectedEdgesOmp(xt, fa) / double(M);
           if (!ASYNCF) fillValueOmpU(vafe, B(0));  // Reset affected vertices for next iteration
           pagerankPruneUpdateRanksOmp<ASYNCF>(a, ASYNCF? vaff : vafe, x, xt, r, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
           V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
@@ -277,7 +285,7 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
       }
     });
   }, o.repeat);
-  return {r, l, t, ti/o.repeat, tm/o.repeat, tc/o.repeat};
+  return {r, l, t, ti/o.repeat, tm/o.repeat, tc/o.repeat, AFF};
 }
 #endif
 #pragma endregion

@@ -54,9 +54,10 @@ void runExperiment(G& x, H& xt, istream& fstream, size_t rows, size_t size, doub
   auto glog  = [&](const auto& ans, const auto& ref, const char *technique, int numThreads, double deletionsf, double insertionsf, int batchIndex, V frontierTolerance=0.0, V pruneTolerance=0.0) {
     auto err = l1NormDeltaOmp(ans.ranks, ref.ranks);
     printf(
-      "{-%.3e/+%.3e batchf, %03d batchi, %03d threads, %.0e frontier, %.0e prune} -> {%09.1fms, %09.1fms init, %09.1fms mark, %09.1fms comp, %03d iter, %.2e err} %s\n",
+      "{-%.3e/+%.3e batchf, %03d batchi, %03d threads, %.0e frontier, %.0e prune} -> {%09.1fms, %09.1fms init, %09.1fms mark, %09.1fms comp, %03d iter, %.2e err, %.4e processedf} %s\n",
       deletionsf, insertionsf, batchIndex, numThreads, frontierTolerance, pruneTolerance,
-      ans.time, ans.initializationTime, ans.markingTime, ans.computationTime, ans.iterations, err, technique
+      ans.time, ans.initializationTime, ans.markingTime, ans.computationTime, ans.iterations, err,
+      ans.processedEdgesFraction, technique
     );
   };
   V tolerance = 1e-10;
