@@ -320,6 +320,18 @@ inline void pagerankInitializeRanksFromOmp(vector<V>& a, vector<V>& r, const H& 
 
 
 #pragma region ENVIRONMENT SETUP
+template <class G, class FA>
+inline size_t countAffectedOmp(const G& x, FA fa) {
+  using  K = typename G::key_type;
+  size_t S = x.span();
+  size_t c = 0;
+  #pragma omp parallel for schedule(auto) reduction(+:c)
+  for (K v=0; v<S; ++v)
+    if (fa(v)) ++c;
+  return c;
+}
+
+
 /**
  * Setup and perform the PageRank algorithm.
  * @param xt transpose of original graph
@@ -386,7 +398,7 @@ inline PagerankResult<V> pagerankInvoke(const H& xt, const PagerankOptions<V>& o
  * @param fs swap current and previous affected vertices ()
  * @returns pagerank result
  */
-template <bool ASYNC=false, class H, class V, class FI, class FM, class FA, class FU, class FC, class FS>
+template <bool ASYNC=false, bool MEASURE=false, class H, class V, class FI, class FM, class FA, class FU, class FC, class FS>
 inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>& o, FI fi, FM fm, FA fa, FU fu, FC fc, FS fs) {
   using  K = typename H::key_type;
   size_t S = xt.span();
@@ -407,12 +419,14 @@ inline PagerankResult<V> pagerankInvokeOmp(const H& xt, const PagerankOptions<V>
       const V C0 = (1-P)/N;
       for (l=0; l<L;) {
         if (ASYNC) {
+          if (MEASURE) printf("Iteration %03d: %zu/%zu affected vertices\n", l, countAffectedOmp(xt, fa), N);
           fc();  // Clear affected vertices
           V el = pagerankUpdateRanksAsyncOmp(r, xt, C0, P, fa, fu); ++l;  // Update ranks of vertices
           fs();  // Swap current and previous affected vertices
           if (el<E) break;  // Check tolerance
         }
         else {
+          if (MEASURE) printf("Iteration %03d: %zu/%zu affected vertices\n", l, countAffectedOmp(xt, fa), N);
           fc();  // Clear affected vertices
           pagerankUpdateRanksOmp(a, xt, r, C0, P, fa, fu); ++l;  // Update ranks of vertices
           V el = liNormDeltaOmp(a, r);  // Compare previous and current ranks
@@ -725,7 +739,7 @@ inline PagerankResult<V> pagerankDynamicFrontierOmp(const G& x, const H& xt, con
   };
   auto fc = [&]() { if (!ASYNCF) fillValueU(vafe, FLAG(0)); };
   auto fs = [&]() { if (!ASYNCF) swap(vaff, vafe); };
-  return pagerankInvokeOmp<ASYNC>(yt, o, fi, fm, fa, fu, fc, fs);
+  return pagerankInvokeOmp<ASYNC, true>(yt, o, fi, fm, fa, fu, fc, fs);
 }
 #endif
 #pragma endregion

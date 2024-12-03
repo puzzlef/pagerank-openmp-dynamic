@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include "_main.hxx"
+#include "pagerank.hxx"
 
 using std::tuple;
 using std::vector;
@@ -236,11 +237,12 @@ inline PagerankResult<V> pagerankPruneInvoke(const G& x, const H& xt, const Page
  * @param fm marking affected vertices (vaff)
  * @returns pagerank result
  */
-template <bool ASYNC=false, bool ASYNCF=false, class FLAG=char, class G, class H, class V, class FI, class FM>
+template <bool ASYNC=false, bool ASYNCF=false, class FLAG=char, bool MEASURE=false, class G, class H, class V, class FI, class FM>
 inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const PagerankOptions<V>& o, FI fi, FM fm) {
   using  K = typename H::key_type;
   using  B = FLAG;
   size_t S = xt.span();
+  size_t N = xt.order();
   V   P  = o.damping;
   V   E  = o.tolerance;
   V   D  = o.frontierTolerance;
@@ -250,6 +252,7 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
   vector<B> vaff(S), vafe;
   if (!ASYNC)  a.resize(S);
   if (!ASYNCF) vafe.resize(S);
+  auto  fa = [&](auto u) { return vaff[u]; };
   float ti = 0, tm = 0, tc = 0;
   float t  = measureDuration([&]() {
     // Initialize rank of each vertex.
@@ -261,6 +264,7 @@ inline PagerankResult<V> pagerankPruneInvokeOmp(const G& x, const H& xt, const P
       const V C0 = (1-P)/S;
       for (l=0; l<L;) {
         if (ASYNC) {
+          if (MEASURE) printf("Iteration %03d: %zu/%zu affected vertices\n", l, countAffectedOmp(xt, fa), N);
           if (!ASYNCF) fillValueOmpU(vafe, B(0));  // Reset affected vertices for next iteration
           V el = pagerankPruneUpdateRanksAsyncOmp<ASYNCF>(r, ASYNCF? vaff : vafe, x, xt, vaff, C0, P, D, C); ++l;  // Update ranks of vertices
           if (!ASYNCF) swap(vafe, vaff);  // Affected vertices in (vaff)
@@ -325,7 +329,7 @@ inline PagerankResult<V> pagerankPruneDynamicFrontierOmp(const G& x, const H& xt
   if (xt.empty()) return {};
   auto fi = [&](auto& a, auto& r) { pagerankInitializeRanksFromOmp<ASYNC>(a, r, xt, *q); };
   auto fm = [&](auto& vaff) { pagerankAffectedFrontierOmpW(vaff, x, y, deletions, insertions); };
-  return pagerankPruneInvokeOmp<ASYNC, ASYNCF, FLAG>(y, yt, o, fi, fm);
+  return pagerankPruneInvokeOmp<ASYNC, ASYNCF, FLAG, true>(y, yt, o, fi, fm);
 }
 #endif
 #pragma endregion

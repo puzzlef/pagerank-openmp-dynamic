@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=64
+#SBATCH --exclusive
+#SBATCH --job-name slurm
+#SBATCH --output=slurm.out
+# module load openmpi/4.1.5
+# module load hpcx-2.7.0/hpcx-ompi
+# source scl_source enable gcc-toolset-11
+# source /opt/rh/gcc-toolset-13/enable
+# module load cuda/12.3
 src="pagerank-openmp-dynamic"
 out="$HOME/Logs/$src$1.log"
 ulimit -s unlimited
@@ -9,16 +21,17 @@ if [[ "$DOWNLOAD" != "0" ]]; then
   rm -rf $src
   git clone https://github.com/puzzlef/$src
   cd $src
+  git checkout measure-affected-iteration-temporal
 fi
 
 # Fixed config
 : "${TYPE:=double}"
 : "${MAX_THREADS:=64}"
-: "${REPEAT_BATCH:=5}"
+: "${REPEAT_BATCH:=1}"
 : "${REPEAT_METHOD:=1}"
 # Parameter sweep for batch (randomly generated)
 : "${BATCH_UNIT:=%}"
-: "${BATCH_LENGTH:=100}"
+: "${BATCH_LENGTH:=10}"
 # Parameter sweep for number of threads
 : "${NUM_THREADS_MODE:=all}"
 : "${NUM_THREADS_BEGIN:=64}"
